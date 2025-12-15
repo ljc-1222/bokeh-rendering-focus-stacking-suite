@@ -207,13 +207,64 @@ When you select an image and click **Preprocess**, the following steps occur:
    - These layers are cached in `outputs/bokeh_rendering/cache/` for fast re-rendering
 
 5. **Rendering (DScatter)**
-   - When you click **Render**, the system uses the preprocessed layers
-   - Applies depth-of-field blur based on:
-     - **Focal plane** (0.0-1.0): Which depth plane stays sharp
-     - **Intensity K** (0.0-60.0): How strong the blur effect is
-     - **Lens kernel size** (7-151, odd): The size of the blur kernel (larger = more bokeh)
-   - Uses CUDA-accelerated scattering for fast rendering (falls back to slow CPU if CUDA extension is missing)
-   - The rendered result is displayed in the preview panel
+   - When you click **Render**, the system runs the **DScatter** renderer on the cached **RGBAD layers**:
+     - Each layer is a 5-channel image: **R,G,B,A,D** where:
+       - **RGB** is the layer color
+       - **A** is the layer opacity/matte (used to gate contributions and reduce edge bleeding)
+      - **D** is a **normalized disparity** map (roughly in `[0, 1]`)
+     - In this suite, preprocessing produces two layers by default:
+       - **Foreground** (`fg_rgbad`)
+       - **Background** (`bg_rgbad`)
+
+   - **Key idea: “scatter”, not convolution**
+     - Classic defocus blur is often implemented as a convolution with a disk kernel. That fails for
+       depth-varying blur and occlusions.
+     - DScatter instead performs a **depth-aware “scattering”** operation: each pixel contributes (scatters)
+       its energy into a neighborhood whose size depends on how out-of-focus it is.
+
+   - **How the controls map to the renderer**
+     - **Focal plane** (0.0–1.0): sets the disparity depth that should remain sharp.
+       Internally, DScatter works with **relative disparity**:
+       - `D_rel = D - focal`
+       Pixels with `D_rel ≈ 0` have minimal blur.
+     - **Intensity K** (0.0–60.0): scales the blur radius. Internally this is `lens_effect`.
+       The effective scatter “radius” grows approximately like:
+       - `r ~ |D_rel| * K`
+       So increasing **K** increases bokeh strength everywhere away from the focal plane.
+     - **Lens (kernel) size** (odd, e.g. 7–151): controls the maximum aperture footprint.
+       DScatter uses a **disk-shaped lens mask** (circle) and a **distance kernel** to decide which
+       neighbors are within the aperture footprint.
+
+   - **What DScatter computes (per layer)**
+     - Each layer is rendered independently by a `Scatter_Rendering` module.
+     - For each output pixel, DScatter accumulates contributions from nearby pixels within the lens footprint.
+       The accumulation uses:
+       - The **lens mask** (disk aperture shape)
+       - A **depth-dependent scatter radius** derived from `|D_rel|` and **K**
+       - An **energy reweighting** term (so large blur disks don’t artificially brighten the image)
+       - The layer **alpha (A)** to gate contributions
+     - The scatter stage produces auxiliary buffers that are later used to normalize and composite, including:
+       - A **weight** buffer (used to normalize RGB contributions)
+       - An **occlusion/confidence** term used for occlusion-aware compositing (see below)
+
+   - **Occlusion-aware multi-layer compositing (foreground over background)**
+     - Rendering is performed **from the first layer to the last layer** (typically foreground → background).
+     - Each layer returns an RGB accumulation plus auxiliary buffers. DScatter then composites them
+       **front-to-back** so foreground blur correctly occludes background blur (and avoids “see-through bokeh”):
+       - The current layer’s RGB is normalized by its weight buffer (with an epsilon for stability)
+       - An occlusion term reduces how much deeper layers can contribute where nearer layers already “cover”
+     - If occlusion reasoning is disabled, DScatter uses a simpler path without occlusion compositing.
+
+   - **CUDA acceleration vs CPU fallback**
+     - Fast path (recommended): a CUDA/C++ extension provides `scatter_cuda` and is used by
+       `app/bokeh_rendering/DScatter/GPU_scatter.py`.
+     - Fallback path: if `scatter_cuda` is not available, the app falls back to a **slow Python/CPU reference**
+       implementation (`app/bokeh_rendering/DScatter/CPU_scatter.py`). The GUI will still work, but rendering
+       can be extremely slow.
+     - The GUI engine also forces the scatter stage onto CPU when the CUDA extension is missing (to avoid
+       running the slow Python-loop fallback on GPU, which is often even slower).
+
+   - The final rendered RGB image is shown in the preview panel (and saved only if you click **Save rendered image**).
 
 **Caching:**
 - Preprocessing results are cached in `outputs/bokeh_rendering/cache/` as `.npz` files
