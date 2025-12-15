@@ -1,7 +1,8 @@
 # Ignore local datasets / images (large, not meant for VCS)
 Imgs/**/*.png
-Imgs/**/**/*.png
-!Imgs/.gitkeep 
+
+# Keep folder structure in git
+!Imgs/**/.gitkeep
 
 # Python virtualenv
 .venv/
