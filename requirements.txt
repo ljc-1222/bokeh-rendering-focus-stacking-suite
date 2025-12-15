@@ -1,0 +1,43 @@
+# Core dependencies - install in order
+# CRITICAL: numpy must be < 2.0 for compatibility with scikit-learn 0.24.2
+numpy==1.19.5
+packaging
+pyyaml
+tqdm
+easydict==1.9.0
+
+# Scientific computing libraries (numpy must be installed first)
+#
+# NOTE: scikit-image==0.17.2 does not ship wheels for Python 3.9, which forces a
+# source build and fails on many modern setups. 0.18.3 is the closest drop-in
+# upgrade that provides cp39 wheels while remaining compatible with numpy==1.19.5.
+scikit-image==0.18.3
+scikit-learn==0.24.2
+
+# Image processing
+# NOTE: Some packages are installed explicitly in `setup.sh` with `--no-deps` to prevent
+# pip from upgrading numpy (which would break ABI compatibility with this old stack):
+# - opencv-python-headless
+# - pytorch-lightning (needed only to load LaMa checkpoint)
+
+# Machine learning frameworks
+# NOTE: TensorFlow is intentionally NOT included here.
+# - The upstream requirements pinned numpy==1.19.5, but modern TensorFlow (e.g. 2.20)
+#   requires newer numpy and CUDA toolkits.
+# - DrBokeh inference path uses PyTorch (DPT depth + LaMa inpainting), not TensorFlow.
+kornia==0.5.0
+timm==1.0.22
+
+# Data processing
+pandas<1.4  # Must be <1.4 to work with numpy 1.19.5 (required for scikit-learn 0.24.2)
+matplotlib<3.6  # Must be <3.6 to work with numpy 1.19.5 (required for scikit-learn 0.24.2)
+joblib
+
+# Utilities
+hydra-core==1.1.0
+tabulate
+
+# Focus stacking (vendored GUI) helpers
+Pillow>=9.0
+requests
+beautifulsoup4

@@ -1,0 +1,23 @@
+pyyaml
+tqdm
+numpy
+easydict==1.9.0
+scikit-image==0.17.2
+scikit-learn==0.24.2
+opencv-python
+# NOTE: TensorFlow is not required for DrBokeh inference.
+# It also conflicts with the main project's pinned numpy==1.19.5 (modern TF needs newer numpy/CUDA).
+# Keep it commented out unless you explicitly need LaMa training/evaluation scripts that rely on TF.
+# tensorflow
+joblib
+matplotlib
+pandas
+albumentations==0.5.2
+hydra-core==1.1.0
+pytorch-lightning==1.2.9
+tabulate
+kornia==0.5.0
+webdataset
+packaging
+scikit-learn==0.24.2
+wldhx.yadisk-direct

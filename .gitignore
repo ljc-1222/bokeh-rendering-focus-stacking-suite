@@ -1,0 +1,38 @@
+# Ignore local datasets / images (large, not meant for VCS)
+Imgs/
+
+# Python virtualenv
+.venv/
+
+# Ignore model weights / checkpoints (large binaries)
+**/*.pt
+**/*.pth
+**/*.ckpt
+**/*.onnx
+**/*.pkl
+**/*.npy
+**/*.npz
+
+# Common generated artifacts
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local outputs / caches
+outputs/
+
+# CUDA / Python build artifacts
+app/cuda-src/build/
+app/cuda-src/dist/
+app/cuda-src/*.egg-info/
+app/cuda-src/**/*.so
+*.so
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
