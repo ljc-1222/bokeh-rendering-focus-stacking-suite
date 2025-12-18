@@ -23,6 +23,7 @@ from app.focus_stacking.pyramids import build_pyramids_stack
 from app.focus_stacking.sharpness import compute_sharpness_map
 from app.focus_stacking.mask import build_masks, build_raw_masks
 from app.focus_stacking.fusion import fuse_pyramids_and_reconstruct
+from app.focus_stacking.evaluation import compute_q_abf
 
 
 class FocusStackingGUI:
@@ -87,9 +88,10 @@ class FocusStackingGUI:
             side="left", padx=5
         )
         ttk.Radiobutton(frame_mask_opts, text="Hard", variable=self.mask_var, value="Hard").pack(side="left", padx=5)
+        ttk.Radiobutton(frame_mask_opts, text="Hard (Argmin)", variable=self.mask_var, value="HardMin").pack(side="left", padx=5)
 
         ttk.Label(frame_settings, text="Top Layer Fusion:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
-        self.top_fusion_var = tk.StringVar(value="max")
+        self.top_fusion_var = tk.StringVar(value="mean")
         frame_top_opts = ttk.Frame(frame_settings)
         frame_top_opts.grid(row=1, column=1, sticky="w")
         ttk.Radiobutton(frame_top_opts, text="Max", variable=self.top_fusion_var, value="max").pack(
@@ -99,16 +101,29 @@ class FocusStackingGUI:
             side="left", padx=5
         )
 
+        ttk.Label(frame_settings, text="Sharpness Def:").grid(row=2, column=0, padx=10, pady=5, sticky="w")
+        self.sharpness_var = tk.StringVar(value="Tenengrad+Blur")
+        self.sharpness_combo = ttk.Combobox(frame_settings, textvariable=self.sharpness_var, state="readonly", width=20)
+        self.sharpness_combo["values"] = [
+            "L", 
+            "GaussianBlur(L)", 
+            "GaussianBlur(L^2)", 
+            "Tenengrad+Blur", 
+            "Variance(L)", 
+            "SML+Blur"
+        ]
+        self.sharpness_combo.grid(row=2, column=1, padx=10, pady=5, sticky="w")
+
         # 3. Pyramid Levels
         frame_levels = ttk.LabelFrame(self.parent, text="3. Pyramid Levels")
         frame_levels.pack(fill="x", padx=10, pady=5)
 
-        self.level_var = tk.IntVar(value=5)
-        self.level_label = ttk.Label(frame_levels, text="Levels: 5")
+        self.level_var = tk.IntVar(value=3)
+        self.level_label = ttk.Label(frame_levels, text="Levels: 3")
         self.level_label.pack(pady=5)
 
         self.level_scale = ttk.Scale(
-            frame_levels, from_=2, to=20, variable=self.level_var, orient="horizontal", command=self._update_level_label
+            frame_levels, from_=1, to=20, variable=self.level_var, orient="horizontal", command=self._update_level_label
         )
         self.level_scale.pack(fill="x", padx=10, pady=10)
 
@@ -391,6 +406,7 @@ class FocusStackingGUI:
             levels = int(self.level_var.get())
             mask_type = self.mask_var.get()
             top_method = self.top_fusion_var.get()
+            sharpness_def = self.sharpness_var.get()
 
             data_path = self.data_dir / folder_name
 
@@ -404,13 +420,15 @@ class FocusStackingGUI:
             _gaussian_pyrs, laplacian_pyrs, top_gaussians = build_pyramids_stack(images, levels)
 
             self._update_status_if_current(fusion_req_id, "Computing sharpness maps...", 50)
-            sharpness_maps = compute_sharpness_map(laplacian_pyrs)
+            sharpness_maps = compute_sharpness_map(laplacian_pyrs, definition=sharpness_def)
 
             self._update_status_if_current(fusion_req_id, f"Building {mask_type} masks...", 70)
             if mask_type == "Soft":
                 masks = build_masks(sharpness_maps, sigma=1.2, ksize=7)
+            elif mask_type == "HardMin":
+                masks = build_raw_masks(sharpness_maps, mode="min")
             else:
-                masks = build_raw_masks(sharpness_maps)
+                masks = build_raw_masks(sharpness_maps, mode="max")
 
             self._update_status_if_current(fusion_req_id, f"Fusing images (Top: {top_method})...", 90)
             fused_image = fuse_pyramids_and_reconstruct(
@@ -428,8 +446,16 @@ class FocusStackingGUI:
 
             self.fused_u8_bgr = fused_u8
 
+            # Compute Q_AB/F score
+            self._update_status_if_current(fusion_req_id, "Computing Q_AB/F score...", 95)
+            # Use finest level sharpness maps (index 0)
+            finest_sharpness = [sm[0] for sm in sharpness_maps]
+            # Convert images to list for the metric function
+            source_images_list = [images[i] for i in range(images.shape[0])]
+            score = compute_q_abf(fused_u8, source_images_list, finest_sharpness)
+
             # Avoid fancy punctuation that can look odd depending on font/theme.
-            self._update_status_if_current(fusion_req_id, "Done! (Preview updated - click Save to export)", 100)
+            self._update_status_if_current(fusion_req_id, f"Done! Q_AB/F: {score:.4f} (Preview updated)", 100)
             self.root.after(0, lambda: self._show_result(fused_u8_bgr=fused_u8, source_images=images))
         except Exception as exc:
             if fusion_req_id != self._fusion_req_id:

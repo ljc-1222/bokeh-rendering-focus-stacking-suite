@@ -15,12 +15,15 @@ import numpy as np
 def compute_sharpness_map(
     laplacian_pyramids: list[list[np.ndarray]],
     output_dir: str | None = None,
+    definition: str = "GaussianBlur(L^2)",
 ) -> list[list[np.ndarray]]:
     """Compute per-level sharpness maps from Laplacian pyramids.
 
     Args:
         laplacian_pyramids: Laplacian pyramids for all images.
         output_dir: Optional directory to save debug visualizations.
+        definition: Sharpness definition ("L", "GaussianBlur(L)", "GaussianBlur(L^2)",
+                    "Tenengrad+Blur", "Variance(L)", "SML+Blur").
 
     Returns:
         Sharpness maps with the same nested structure as `laplacian_pyramids`.
@@ -41,10 +44,37 @@ def compute_sharpness_map(
         for k in range(num_levels):
             Lk = lap_pyr[k]
 
-            # Compute sharpness metric
-            # Using Gaussian smoothed squared Laplacian (local energy)
-            # For color images, this produces a per-channel sharpness map
-            Ek = cv2.GaussianBlur(Lk * Lk, (3, 3), 0)
+            # Compute sharpness metric based on definition
+            if definition == "L":
+                # Just magnitude of Laplacian
+                Ek = np.abs(Lk)
+            elif definition == "GaussianBlur(L)":
+                # Smoothed magnitude
+                Ek = cv2.GaussianBlur(np.abs(Lk), (3, 3), 0)
+            elif definition == "Tenengrad+Blur":
+                # Tenengrad (Sobel energy) + Blur
+                gx = cv2.Sobel(Lk, cv2.CV_32F, 1, 0, ksize=3)
+                gy = cv2.Sobel(Lk, cv2.CV_32F, 0, 1, ksize=3)
+                E = gx**2 + gy**2
+                Ek = cv2.GaussianBlur(E, (3, 3), 0)
+            elif definition == "Variance(L)":
+                # Local variance: Blur(L^2) - (Blur(L))^2
+                mean_L = cv2.GaussianBlur(Lk, (3, 3), 0)
+                mean_L2 = cv2.GaussianBlur(Lk**2, (3, 3), 0)
+                Ek = mean_L2 - mean_L**2
+                Ek = np.maximum(Ek, 0)
+            elif definition == "SML+Blur":
+                # Sum Modified Laplacian + Blur
+                # ML = |d2L/dx2| + |d2L/dy2|
+                k_x = np.array([[-1, 2, -1]], dtype=np.float32)
+                k_y = np.array([[-1], [2], [-1]], dtype=np.float32)
+                Lx = cv2.filter2D(Lk, cv2.CV_32F, k_x)
+                Ly = cv2.filter2D(Lk, cv2.CV_32F, k_y)
+                ML = np.abs(Lx) + np.abs(Ly)
+                Ek = cv2.GaussianBlur(ML, (3, 3), 0)
+            else: # "GaussianBlur(L^2)" or default
+                # Smoothed squared Laplacian (local energy)
+                Ek = cv2.GaussianBlur(Lk * Lk, (3, 3), 0)
             
             level_sharpness.append(Ek)
 

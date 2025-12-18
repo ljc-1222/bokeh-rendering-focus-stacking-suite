@@ -4,6 +4,11 @@ Imgs/**/*.png
 # Keep folder structure in git
 !Imgs/**/.gitkeep
 
+# Keep IMG_2649 as example in both folders
+!Imgs/bokeh_rendering/IMG_2649.png
+!Imgs/focus_stacking/IMG_2649/
+!Imgs/focus_stacking/IMG_2649/**/*.png
+
 # Python virtualenv
 .venv/
 
@@ -22,6 +27,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.Identifier
 
 # Local outputs / caches
 outputs/
@@ -38,4 +44,3 @@ app/cuda-src/**/*.so
 Thumbs.db
 .vscode/
 .idea/
-

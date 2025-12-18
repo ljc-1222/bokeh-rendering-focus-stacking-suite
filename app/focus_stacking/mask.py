@@ -11,8 +11,13 @@ import cv2
 import numpy as np
 
 
-def build_raw_masks(sharpness_maps: list[list[np.ndarray]]) -> list[list[np.ndarray]]:
-    """Build hard (one-hot) decision masks from sharpness maps."""
+def build_raw_masks(sharpness_maps: list[list[np.ndarray]], mode: str = "max") -> list[list[np.ndarray]]:
+    """Build hard (one-hot) decision masks from sharpness maps.
+    
+    Args:
+        sharpness_maps: List of sharpness maps.
+        mode: "max" for sharpest pixels (default), "min" for blurriest pixels.
+    """
     num_images = len(sharpness_maps)
     if num_images == 0:
         return []
@@ -30,12 +35,15 @@ def build_raw_masks(sharpness_maps: list[list[np.ndarray]]) -> list[list[np.ndar
             axis=0
         )
 
-        # Find the index of the image with the maximum sharpness for each pixel
-        idx_max = np.argmax(Ek_stack, axis=0)  # shape: (H_k, W_k)
+        # Find the index of the image with the maximum (or minimum) sharpness for each pixel
+        if mode == "min":
+            idx_selected = np.argmin(Ek_stack, axis=0)
+        else:
+            idx_selected = np.argmax(Ek_stack, axis=0)
 
         # Create a one-hot mask for each image
         for i in range(num_images):
-            mask = (idx_max == i).astype(np.float32)  # (H_k, W_k), 0/1
+            mask = (idx_selected == i).astype(np.float32)  # (H_k, W_k), 0/1
             raw_masks[i][k] = mask
 
     return raw_masks
@@ -81,7 +89,7 @@ def smooth_and_normalize_masks(
 
     return smoothed_masks
 
-def build_masks(sharpness_maps: list[list[np.ndarray]], sigma: float = 1.0, ksize: int = 5) -> list[list[np.ndarray]]:
+def build_masks(sharpness_maps: list[list[np.ndarray]], sigma: float = 1.0, ksize: int = 5, mode: str = "max") -> list[list[np.ndarray]]:
     """Convenience wrapper: sharpness maps -> soft/normalized masks."""
-    raw_masks = build_raw_masks(sharpness_maps)
+    raw_masks = build_raw_masks(sharpness_maps, mode=mode)
     return smooth_and_normalize_masks(raw_masks, sigma=sigma, ksize=ksize)

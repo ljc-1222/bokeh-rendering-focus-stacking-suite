@@ -76,10 +76,6 @@ class DrBokehGUI:
         # Lens kernel size control (odd int). Use DoubleVar because ttk.Scale produces floats.
         self.lens_var = tk.DoubleVar(value=71.0)
 
-        # Optional preprocessing controls.
-        # Bilateral-median mask filtering is intentionally OFF by default because it's slow.
-        self.mask_filter_var = tk.BooleanVar(value=False)
-
         # Engine is initialized lazily when the user clicks Preprocess/Render.
         self.engine: Optional[Any] = None
 
@@ -168,15 +164,6 @@ class DrBokehGUI:
         self.lens_scale.grid(row=2, column=1, sticky="ew", padx=10, pady=6)
         self.lens_value_label = ttk.Label(frame_settings, text=str(self._current_lens()))
         self.lens_value_label.grid(row=2, column=2, sticky="w", padx=10, pady=6)
-
-        # Preprocessing option: mask denoising (slow).
-        self.mask_filter_check = ttk.Checkbutton(
-            frame_settings,
-            text="Enable mask bilateral-median filter (slow)",
-            variable=self.mask_filter_var,
-            command=self._on_mask_filter_toggled,
-        )
-        self.mask_filter_check.grid(row=3, column=0, columnspan=3, sticky="w", padx=10, pady=6)
 
         frame_settings.columnconfigure(1, weight=1)
 
@@ -544,21 +531,6 @@ class DrBokehGUI:
             self._overlay_request["k_blur"] = float(self.k_var.get())
         self._overlay_event.set()
 
-    def _on_mask_filter_toggled(self) -> None:
-        """Invalidate preprocessing when the mask-filter toggle changes.
-
-        This does NOT auto-run preprocessing or rendering; the user must click the
-        corresponding buttons. We only ensure we never render with stale layers.
-        """
-        if self.state.busy:
-            return
-
-        # Invalidate cached preprocessing + render memoization.
-        self.state.pre = None
-        self.state.last_render_key = None
-        self.state.last_render_u8 = None
-        self._set_status("Mask filter changed. Please click 'Preprocess' again.", 0)
-
     def _start_preprocess(self) -> None:
         if not self._ensure_engine():
             return
@@ -575,7 +547,6 @@ class DrBokehGUI:
                 t0 = time.time()
                 pre = self.engine.preprocess(
                     self.state.rgb_path,
-                    mask_filter=bool(self.mask_filter_var.get()),
                 )
                 dt = time.time() - t0
                 self.state.pre = pre
