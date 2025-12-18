@@ -1,4 +1,4 @@
-# Bokeh Rendering + Focus Stacking Suite — Image Processing Suite
+# Bokeh Rendering + Focus Stacking — Image Processing Suite
 
 ## Project description
 This project is a **DSP lab image-processing suite** that merges two pipelines into a single runnable demo:
