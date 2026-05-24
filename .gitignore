@@ -1,14 +1,3 @@
-# Ignore local datasets / images (large, not meant for VCS)
-Imgs/**/*.png
-
-# Keep folder structure in git
-!Imgs/**/.gitkeep
-
-# Keep IMG_2649 as example in both folders
-!Imgs/bokeh_rendering/IMG_2649.png
-!Imgs/focus_stacking/IMG_2649/
-!Imgs/focus_stacking/IMG_2649/**/*.png
-
 # Python virtualenv
 .venv/
 
@@ -33,10 +22,11 @@ __pycache__/
 outputs/
 
 # CUDA / Python build artifacts
-app/cuda-src/build/
-app/cuda-src/dist/
-app/cuda-src/*.egg-info/
-app/cuda-src/**/*.so
+brnfs/cuda_src/build/
+brnfs/cuda_src/dist/
+brnfs/cuda_src/*.egg-info/
+brnfs/cuda_src/**/*.so
+*.egg-info/
 *.so
 
 # OS/editor noise
