@@ -1,7 +1,7 @@
 # Third-Party Notices
 
-This project vendors (copies) portions of upstream open-source projects for inference/runtime use.
-The upstream license texts are included in this repository and must be preserved when redistributing.
+This project vendors (copies) portions of upstream projects for inference/runtime use.
+Known upstream license texts included in this repository must be preserved when redistributing.
 
 ## DPT (Depth Prediction Transformer)
 
@@ -27,4 +27,13 @@ Notes:
 Notes:
 - This repo uses the vendored LaMa generator for inference; training utilities remain vendored but are not required for the demo.
 
+## LDF / Dr.Bokeh-style Saliency Components
+
+- **Vendored code location**: `bokeh_rendering_and_focus_stacking_suite/app/bokeh_rendering/Salient/LDF/`
+- **Usage in this repo**: foreground/saliency inference for bokeh rendering.
+- **License status in this checkout**: no standalone upstream license file was found in the vendored LDF directory.
+
+Notes:
+- Do not claim a specific LDF/Dr.Bokeh license from this repository alone.
+- Verify the upstream license terms before public redistribution.
 
