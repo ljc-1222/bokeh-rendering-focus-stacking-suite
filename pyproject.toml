@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brnfs"
+version = "0.1.0"
+description = "Bokeh rendering and focus stacking suite"
+readme = "README.md"
+requires-python = ">=3.9,<3.10"
+dependencies = []
+
+[project.scripts]
+brnfs = "brnfs.cli:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["brnfs*", "app*"]
+
+[tool.setuptools.package-data]
+"brnfs.cuda_src" = ["*.cpp", "*.cu", "setup.py"]

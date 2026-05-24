@@ -10,13 +10,14 @@ import torch
 
 import cv2
 
+from brnfs import paths
 from app.bokeh_rendering.Salient.LDF.train_fine.net import LDF
 
 
 class Salient_Inference:
     def __init__(self):
-        model_snapshot = 'app/bokeh_rendering/Salient/LDF/train_fine/out/model-40'
-        resnet_path    = 'app/bokeh_rendering/Salient/LDF/res/resnet50-19c8e357.pth'
+        model_snapshot = str(paths.ldf_snapshot_path())
+        resnet_path    = str(paths.ldf_resnet_path())
 
         # Minimal runtime config: training dataset + dataloaders are not needed for inference.
         self.cfg = _LDFConfig(snapshot=model_snapshot)
@@ -119,4 +120,3 @@ class _LDFConfig(object):
         # Upstream normalization constants (BGR->RGB already handled by caller).
         self.mean = np.array([[[124.55, 118.90, 102.94]]])
         self.std = np.array([[[56.77, 55.97, 57.50]]])
-

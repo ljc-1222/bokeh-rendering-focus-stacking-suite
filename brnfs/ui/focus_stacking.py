@@ -1,9 +1,9 @@
 """Tkinter GUI for Laplacian-Pyramid-Based Focus Stacking (vendored into `bokeh_rendering_and_focus_stacking_suite/`).
 
 Key behavior changes vs the standalone focus-stacking project:
-- Datasets are loaded from `bokeh_rendering_and_focus_stacking_suite/Imgs/focus_stacking/<set_name>/`
+- Datasets are loaded from `examples/focus/<set_name>/`.
 - **No auto-saving**: generating a fused image only updates the preview; saving is manual
-  (default directory: `bokeh_rendering_and_focus_stacking_suite/outputs/focus_stacking/`).
+  (default directory: `outputs/focus/`).
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageTk
 
+from brnfs import paths
 from app.focus_stacking.preprocess import preprocess_image_stack
 from app.focus_stacking.pyramids import build_pyramids_stack
 from app.focus_stacking.sharpness import compute_sharpness_map
@@ -33,9 +34,8 @@ class FocusStackingGUI:
         self.root = root
         self.parent: tk.Misc = parent or root
 
-        project_root = Path(__file__).resolve().parents[1]  # bokeh_rendering_and_focus_stacking_suite/
-        self.data_dir = project_root / "Imgs" / "focus_stacking"
-        self.output_dir = project_root / "outputs" / "focus_stacking"
+        self.data_dir = paths.focus_input_dir()
+        self.output_dir = paths.FOCUS_OUTPUT_DIR
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Animation state
@@ -594,13 +594,3 @@ class FocusStackingGUI:
         self.result_label.config(image="", text="(Result will appear after you click Generate)", justify="center")
         self.anim_label.image = None  # type: ignore[attr-defined]
         self.result_label.image = None  # type: ignore[attr-defined]
-
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.title("Focus Stacking GUI")
-    root.geometry("900x1000")
-    FocusStackingGUI(root)
-    root.mainloop()
-
-

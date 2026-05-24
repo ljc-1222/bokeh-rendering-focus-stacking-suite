@@ -1,7 +1,7 @@
 """GUI-friendly Dr.Bokeh rendering engine (preprocess once, render many).
 
-This module wraps the existing forward-rendering pipeline used by
-`app/bokeh_rendering/Inference.py` into a reusable API suitable for a GUI:
+This module exposes the forward-rendering pipeline as a reusable API suitable
+for the CLI and GUI:
 
 - One-time preprocessing per image (RGB -> disp/alpha -> layered RGBAD)
 - Fast re-rendering for varying focal plane and blur intensity (K)
@@ -17,6 +17,8 @@ from typing import Any, Optional
 import cv2
 import numpy as np
 import torch
+
+from brnfs import paths
 
 
 @dataclass(frozen=True)
@@ -93,8 +95,7 @@ class BokehEngine:
         # typically even slower due to kernel launch overhead).
         self._scatter_device: torch.device = self.device
 
-        # Standard cache location: bokeh_rendering_and_focus_stacking_suite/outputs/bokeh_rendering/cache/
-        base_cache = cache_dir or Path(__file__).resolve().parents[2] / "outputs" / "bokeh_rendering" / "cache"
+        base_cache = cache_dir or paths.BOKEH_CACHE_DIR
         self.cache_dir: Path = base_cache
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -353,7 +354,7 @@ class BokehEngine:
         fg_rgbad = pre.fg_rgbad.copy()
         bg_rgbad = pre.bg_rgbad.copy()
 
-        # Optional highlight enhancement (matches `Inference.py` behavior)
+        # Optional highlight enhancement.
         if highlight:
             disp = pre.disp
             rgb = pre.rgb
@@ -368,7 +369,7 @@ class BokehEngine:
             fg_rgbad[..., :3] = fg_rgbad[..., :3] * (1.0 + mask * float(highlight_enhance_ratio))
             bg_rgbad[..., :3] = bg_rgbad[..., :3] * (1.0 + mask * float(highlight_enhance_ratio))
 
-        # Gamma correction before rendering (matches `Inference.py` behavior)
+        # Gamma correction before rendering.
         fg_rgbad[..., :3] = (fg_rgbad[..., :3] + float(offset)) ** float(gamma)
         bg_rgbad[..., :3] = (bg_rgbad[..., :3] + float(offset)) ** float(gamma)
 
@@ -432,5 +433,3 @@ class BokehEngine:
             raise ValueError(f"`coc_threshold` must be > 0, got {coc_threshold}.")
         coc = self.coc_map(pre, focal=float(focal), k_blur=float(k_blur))
         return (coc <= float(coc_threshold))
-
-

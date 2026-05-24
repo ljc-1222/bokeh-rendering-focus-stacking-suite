@@ -14,6 +14,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from brnfs import paths
+
 
 def load_image_stack(folder_path: str, file_extension: str = "png") -> np.ndarray:
     """Load a stack of images from a folder.
@@ -131,10 +133,8 @@ def preprocess_image_stack(folder_path: str, file_extension: str = "png", use_ca
     Returns:
         A float32 array with shape (N, H, W, 3) in BGR order.
     """
-    # Determine cache path (store under bokeh_rendering_and_focus_stacking_suite/outputs/focus_stacking/cache)
     base_name = os.path.basename(os.path.normpath(folder_path))
-    project_root = Path(__file__).resolve().parents[2]  # bokeh_rendering_and_focus_stacking_suite/
-    cache_dir = project_root / "outputs" / "focus_stacking" / "cache"
+    cache_dir = paths.FOCUS_CACHE_DIR
     cache_file = cache_dir / f"{base_name}_aligned.npy"
 
     if use_cache and cache_file.exists():
@@ -159,4 +159,3 @@ def preprocess_image_stack(folder_path: str, file_extension: str = "png", use_ca
             print(f"Failed to save cache: {e}")
 
     return image_stack
- 

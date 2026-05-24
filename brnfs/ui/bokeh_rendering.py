@@ -22,6 +22,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageTk
 
+from brnfs import paths
+
 
 @dataclass
 class _UIState:
@@ -66,9 +68,8 @@ class DrBokehGUI:
             self.base_width = 820
             self.base_height = 760
 
-        project_root = Path(__file__).resolve().parents[1]  # bokeh_rendering_and_focus_stacking_suite/
-        self.img_dir = project_root / "Imgs" / "bokeh_rendering"
-        self.out_dir = project_root / "outputs" / "bokeh_rendering"
+        self.img_dir = paths.bokeh_input_dir()
+        self.out_dir = paths.BOKEH_OUTPUT_DIR
         self.out_dir.mkdir(parents=True, exist_ok=True)
 
         self.state = _UIState()
@@ -258,7 +259,7 @@ class DrBokehGUI:
         else:
             self._clear_source_preview()
             self._clear_result_preview()
-            self._set_status("No images found in Imgs/.", 0)
+            self._set_status("No images found in examples/bokeh.", 0)
 
     def _on_image_selected(self) -> None:
         if self.state.busy:
@@ -678,11 +679,3 @@ class DrBokehGUI:
             self._set_status(f"Saved: {Path(out_path).name}", 0)
         except Exception as exc:
             messagebox.showerror("Save failed", str(exc))
-
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = DrBokehGUI(root)
-    root.mainloop()
-
-

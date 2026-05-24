@@ -25,9 +25,11 @@ import torch.nn.functional as F
 import yaml
 from omegaconf import OmegaConf
 
+from brnfs import paths
+
 # Make `saicinpainting` importable as a top-level package (matches upstream LaMa layout).
 sys.path.insert(0, ".")
-sys.path.insert(0, "./app/bokeh_rendering/Inpainting/lama")
+sys.path.insert(0, str(paths.LAMA_VENDOR_DIR))
 
 from saicinpainting.training.modules import make_generator  # type: ignore
 
@@ -46,12 +48,11 @@ class RGB_Inpainting_Inference:
         - build the generator from `big-lama/config.yaml`
         - load `big-lama/models/best.ckpt` (Lightning checkpoint) and extract `generator.*` weights
         """
-        predict_cfg_path = "app/bokeh_rendering/Inpainting/lama/configs/prediction/default.yaml"
+        predict_cfg_path = str(paths.lama_predict_config_path())
         with open(predict_cfg_path, "r") as f:
             predict_cfg = yaml.safe_load(f)
 
-        model_dir = "app/bokeh_rendering/Inpainting/lama/big-lama"
-        train_cfg_path = os.path.join(model_dir, "config.yaml")
+        train_cfg_path = str(paths.lama_train_config_path())
         # The training config uses OmegaConf interpolations (e.g. `${generator.*}` and `${env:VAR}`).
         # Some OmegaConf versions ship a built-in `env` resolver that *errors* when a variable is
         # missing (e.g. TORCH_HOME). For inference, we prefer a permissive resolver that returns
@@ -73,7 +74,7 @@ class RGB_Inpainting_Inference:
         self.generator = make_generator(None, kind=gen_kind, **gen_cfg)
 
         # Lightning checkpoint; in newer PyTorch versions `weights_only=True` is default and will fail.
-        ckpt_path = os.path.join(model_dir, "models", str(predict_cfg.get("model", {}).get("checkpoint", "best.ckpt")))
+        ckpt_path = str(paths.lama_checkpoint_path())
         try:
             ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
         except TypeError:
@@ -122,4 +123,3 @@ class RGB_Inpainting_Inference:
             cur_res = cur_res[:ori_h, :ori_w]
 
         return cur_res
-

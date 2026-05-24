@@ -17,8 +17,10 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
+from brnfs import paths
+
 sys.path.insert(0, '.')
-sys.path.insert(0, 'app/bokeh_rendering/Depth/DPT')
+sys.path.insert(0, str(paths.DPT_VENDOR_DIR))
 
 import glob
 
@@ -32,7 +34,7 @@ from dpt.transforms import Resize, NormalizeImage, PrepareForNet
 
 class Depth_Inference:
     def __init__(self):
-        model_path = 'app/bokeh_rendering/Depth/DPT/weights/dpt_large-midas-2f21e586.pt'
+        model_path = str(paths.dpt_weight_path())
         model_type = 'dpt_large'
 
         # set torch options
@@ -103,4 +105,3 @@ class Depth_Inference:
             )
 
             return prediction
-
