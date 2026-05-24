@@ -4,7 +4,7 @@ Build and install the CUDA/C++ extension that provides the `scatter_cuda` Python
 
 .DESCRIPTION
 Reuses the currently-active Python environment (venv/conda) and builds the extension in
-`app/cuda-src`. Prefer running `bokeh_rendering_and_focus_stacking_suite/setup.ps1` end-to-end, but this is useful for rebuilds.
+`brnfs/cuda_src`. Prefer running `bokeh_rendering_and_focus_stacking_suite/setup.ps1` end-to-end, but this is useful for rebuilds.
 
 .EXAMPLE
 PS> cd ".\bokeh_rendering_and_focus_stacking_suite"
@@ -15,12 +15,11 @@ PS> .\scripts\build_scatter_cuda.ps1
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-Push-Location (Join-Path $ProjectRoot "app\cuda-src")
+Push-Location (Join-Path $ProjectRoot "brnfs\cuda_src")
 try {
     python -m pip install --no-build-isolation --force-reinstall --no-cache-dir .
     Write-Host "Done. You should now be able to import scatter_cuda (used by app/bokeh_rendering/DScatter/GPU_scatter.py)."
 } finally {
     Pop-Location
 }
-
 

@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 # Build and install the CUDA/C++ extension that provides the `scatter_cuda` Python module.
 # This reuses the currently-active environment (e.g., `conda activate drbokeh`).
 
-pushd app/cuda-src >/dev/null
+pushd brnfs/cuda_src >/dev/null
 python - <<'PY'
 import re
 import subprocess
@@ -81,5 +81,4 @@ python -m pip install -v --no-build-isolation .
 popd >/dev/null
 
 echo "Done. You should now be able to import scatter_cuda (used by app/bokeh_rendering/DScatter/GPU_scatter.py)."
-
 
