@@ -1,20 +1,23 @@
 <#
 .SYNOPSIS
-Deterministic environment setup script for the `bokeh_rendering_and_focus_stacking_suite/` project (Windows PowerShell).
+Deterministic environment setup script for BRnFS (Windows PowerShell).
 
 .DESCRIPTION
-Creates/updates a single Python venv under `.venv`, installs the pinned legacy stack
-(numpy==1.19.5, scikit-image==0.18.3, ...), installs PyTorch CUDA wheels (cu117),
-and builds/installs the custom CUDA extension (`scatter_cuda`).
+Creates/updates `.venv`, installs the pinned Python 3.9 runtime, ensures model
+weights, and builds the optional fast `scatter_cuda` renderer.
 
-This script is the Windows counterpart of `setup.sh`.
+Useful overrides:
+  $env:PYTHON_BIN = "C:\Path\To\python.exe"
+  $env:BRNFS_SKIP_WEIGHTS = "1"
+  $env:BRNFS_SKIP_SCATTER_CUDA = "1"
+  $env:CUDA_HOME = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.7"
 
 .EXAMPLE
 PS> cd ".\bokeh_rendering_and_focus_stacking_suite"
 PS> Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 PS> .\setup.ps1
 PS> .\.venv\Scripts\Activate.ps1
-PS> python .\gui\gui.py
+PS> python -m brnfs gui
 #>
 
 $ErrorActionPreference = "Stop"
@@ -30,9 +33,21 @@ function Get-PythonLauncher {
     Picks a Python command to use.
 
     .DESCRIPTION
-    Prefers the Windows Python launcher (`py -3.9`) to guarantee Python 3.9, falling back
-    to `python` if the launcher isn't available.
+    Prefers `$env:PYTHON_BIN`, then the Windows Python launcher (`py -3.9`), then
+    `python` if it is Python 3.9.
     #>
+    if ($env:PYTHON_BIN -and $env:PYTHON_BIN.Trim() -ne "") {
+        try {
+            $ver = & $env:PYTHON_BIN -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+            if ($ver.Trim() -eq "3.9") {
+                return @($env:PYTHON_BIN)
+            }
+            throw "ERROR: BRnFS requires Python 3.9, but `$env:PYTHON_BIN is Python $($ver.Trim())."
+        } catch {
+            throw "ERROR: failed to run `$env:PYTHON_BIN='$env:PYTHON_BIN'. $($_.Exception.Message)"
+        }
+    }
+
     if (Get-Command py -ErrorAction SilentlyContinue) {
         try {
             $ver = & py -3.9 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
@@ -53,17 +68,24 @@ function Get-PythonLauncher {
             # ignore and throw below
         }
     }
-    throw "ERROR: Python 3.9 not found. Install Python 3.9 (required for this repo's pinned legacy stack), or ensure `py -3.9` is available."
+    throw "ERROR: Python 3.9 not found. Install Python 3.9 (required for this repo's pinned dependency stack), or ensure `py -3.9` is available."
 }
 
 function Invoke-Py {
     param(
         [Parameter(Mandatory = $true)][string[]]$PythonCmd,
-        [Parameter(Mandatory = $true)][string[]]$Args
+        [Parameter(Mandatory = $true)][string[]]$PyArgs
     )
-    & $PythonCmd @Args
+    $Exe = $PythonCmd[0]
+    $CommandArgs = @()
+    if ($PythonCmd.Count -gt 1) {
+        $CommandArgs += $PythonCmd[1..($PythonCmd.Count - 1)]
+    }
+    $CommandArgs += $PyArgs
+
+    & $Exe @CommandArgs
     if ($LASTEXITCODE -ne 0) {
-        throw "Python command failed: $($PythonCmd -join ' ') $($Args -join ' ')"
+        throw "Python command failed: $($PythonCmd -join ' ') $($PyArgs -join ' ')"
     }
 }
 
@@ -72,31 +94,28 @@ $VenvDir = Join-Path $ProjectRoot ".venv"
 
 Write-Info "Project root: $ProjectRoot"
 
-$PythonCmd = $null
-try {
-    $PythonCmd = Get-PythonLauncher
-} catch {
-    # Optional conda bootstrap (Windows counterpart to setup.sh behavior).
-    if (-not $env:BRNFS_RERUN_IN_CONDA -and $env:CONDA_PREFIX -and (Get-Command conda -ErrorAction SilentlyContinue)) {
-        $CondaEnvName = if ($env:BRNFS_CONDA_ENV_NAME -and $env:BRNFS_CONDA_ENV_NAME.Trim() -ne "") { $env:BRNFS_CONDA_ENV_NAME } else { "BRnFS" }
-        Write-Info "Detected conda shell but Python 3.9 was not found; bootstrapping conda env '$CondaEnvName' with Python 3.9..."
-        & conda create -n $CondaEnvName python=3.9 -y
-        if ($LASTEXITCODE -ne 0) { throw "conda create failed." }
+$PythonCmd = Get-PythonLauncher
 
-        Write-Info "Re-running setup inside conda env '$CondaEnvName' (via conda run)..."
-        $env:BRNFS_RERUN_IN_CONDA = "1"
-        $env:BRNFS_CONDA_ENV_NAME = $CondaEnvName
-        & conda run -n $CondaEnvName powershell -ExecutionPolicy Bypass -File $PSCommandPath
-        exit $LASTEXITCODE
+Write-Info "Python for new venv: $($PythonCmd -join ' ')"
+
+if (Test-Path -LiteralPath $VenvDir) {
+    $ExistingVenvPython = Join-Path $VenvDir "Scripts\python.exe"
+    $ExistingActivateScript = Join-Path $VenvDir "Scripts\Activate.ps1"
+    if (-not (Test-Path -LiteralPath $ExistingVenvPython) -or -not (Test-Path -LiteralPath $ExistingActivateScript)) {
+        Write-Info "Removing broken venv: $VenvDir"
+        Remove-Item -LiteralPath $VenvDir -Recurse -Force
+    } else {
+        $VenvPyMinor = (& $ExistingVenvPython -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')").Trim()
+        if ($VenvPyMinor -ne "3.9") {
+            Write-Info "Removing venv with unsupported Python ${VenvPyMinor}: $VenvDir"
+            Remove-Item -LiteralPath $VenvDir -Recurse -Force
+        }
     }
-    throw
 }
-
-Write-Info "Using python: $($PythonCmd -join ' ')"
 
 if (-not (Test-Path -LiteralPath $VenvDir)) {
     Write-Info "Creating venv: $VenvDir"
-    Invoke-Py -PythonCmd $PythonCmd -Args @("-m", "venv", "--prompt", "BRnFS", $VenvDir)
+    Invoke-Py -PythonCmd $PythonCmd -PyArgs @("-m", "venv", "--prompt", "BRnFS", $VenvDir)
 }
 
 $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
@@ -110,12 +129,13 @@ $ActivateScript = Join-Path $VenvDir "Scripts\Activate.ps1"
 if (Test-Path -LiteralPath $ActivateScript) {
     . $ActivateScript
 }
+Write-Info "Using venv python: $(& $VenvPython -c 'import sys; print(sys.executable)')"
 
 Write-Info "Upgrading pip tooling..."
-# Pin pip for best compatibility with legacy manylinux wheel tags.
-& $VenvPython -m pip install --upgrade "pip<24" setuptools wheel
+# Pin pip for best compatibility with older manylinux wheel tags.
+& $VenvPython -m pip install --upgrade "pip<24" "setuptools<81" wheel
 
-Write-Info "Installing pinned numpy first (build prerequisite for legacy packages)..."
+Write-Info "Installing pinned numpy first (build prerequisite for older packages)..."
 & $VenvPython -m pip install --no-cache-dir --only-binary=:all: "numpy==1.19.5"
 
 Write-Info "Installing PyTorch CUDA 11.7 wheels..."
@@ -126,6 +146,8 @@ Write-Info "Installing PyTorch CUDA 11.7 wheels..."
     --extra-index-url https://download.pytorch.org/whl/cu117
 
 Write-Info "Installing remaining Python dependencies from requirements.txt..."
+# requirements.txt intentionally excludes torch/opencv/lightning packages that
+# are installed explicitly above/below to avoid accidental numpy upgrades.
 & $VenvPython -m pip install --no-cache-dir -r (Join-Path $ProjectRoot "requirements.txt")
 
 Write-Info "Installing OpenCV (pinned) WITHOUT upgrading numpy..."
@@ -144,6 +166,9 @@ try {
 } catch {
     # ignore
 }
+
+Write-Info "Installing this project in editable mode (without dependency resolution)..."
+& $VenvPython -m pip install -e $ProjectRoot --no-deps
 
 ###############################################################################
 # Model weights (LDF + LaMa + MiDaS/DPT)
@@ -248,27 +273,54 @@ function Ensure-Weight {
     return $true
 }
 
+function Ensure-ExistingWeight {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Destination,
+        [Parameter(Mandatory = $true)][long]$MinBytes
+    )
+
+    if (-not (Test-Path -LiteralPath $Destination)) {
+        Write-Error "$Name is missing: $Destination"
+        return $false
+    }
+
+    $FileInfo = Get-Item -LiteralPath $Destination
+    if ($FileInfo.Length -lt $MinBytes) {
+        Write-Error "$Name is incomplete ($($FileInfo.Length) bytes): $Destination"
+        return $false
+    }
+
+    Write-Info "✓ $Name weight present: $Destination ($($FileInfo.Length) bytes)"
+    return $true
+}
+
 if ($env:BRNFS_SKIP_WEIGHTS -ne "1") {
     Write-Info "Ensuring model weights are available (set `$env:BRNFS_SKIP_WEIGHTS = '1' to skip)..."
     
     $WeightsOk = $true
+
+    $WeightsOk = (Ensure-ExistingWeight `
+        -Name "LDF snapshot" `
+        -Destination (Join-Path $ProjectRoot "models\ldf\model-40") `
+        -MinBytes 50000000) -and $WeightsOk
     
     $WeightsOk = (Ensure-Weight `
         -Name "LDF (salient detection backbone)" `
         -Url "https://huggingface.co/ysheng/DrBokeh/resolve/main/resnet50-19c8e357.pth?download=true" `
-        -Destination (Join-Path $ProjectRoot "app\bokeh_rendering\Salient\LDF\res\resnet50-19c8e357.pth") `
+        -Destination (Join-Path $ProjectRoot "models\ldf\resnet50-19c8e357.pth") `
         -MinBytes 50000000) -and $WeightsOk
     
     $WeightsOk = (Ensure-Weight `
         -Name "LaMa (RGB inpainting)" `
         -Url "https://huggingface.co/ysheng/DrBokeh/resolve/main/best.ckpt?download=true" `
-        -Destination (Join-Path $ProjectRoot "app\bokeh_rendering\Inpainting\lama\big-lama\models\best.ckpt") `
+        -Destination (Join-Path $ProjectRoot "models\lama\big-lama\models\best.ckpt") `
         -MinBytes 150000000) -and $WeightsOk
     
     $WeightsOk = (Ensure-Weight `
         -Name "MiDaS/DPT (monocular depth)" `
         -Url "https://huggingface.co/ysheng/DrBokeh/resolve/main/dpt_large-midas-2f21e586.pt?download=true" `
-        -Destination (Join-Path $ProjectRoot "app\bokeh_rendering\Depth\DPT\weights\dpt_large-midas-2f21e586.pt") `
+        -Destination (Join-Path $ProjectRoot "models\dpt\dpt_large-midas-2f21e586.pt") `
         -MinBytes 300000000) -and $WeightsOk
     
     if (-not $WeightsOk) {
@@ -301,22 +353,27 @@ if ($TorchLibDir -and (Test-Path -LiteralPath $TorchLibDir)) {
     $env:Path = "$TorchLibDir;$env:Path"
 }
 
-Write-Info "Building the CUDA extension (scatter_cuda) against the CURRENT PyTorch..."
 $ScatterBuilt = $false
-Push-Location (Join-Path $ProjectRoot "app\cuda-src")
-try {
-    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "build", "dist"
-    Get-ChildItem -Force -Directory -Filter "*.egg-info" -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-    Get-ChildItem -Recurse -Force -Include *.pyd,*.dll,*.so -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+if ($env:BRNFS_SKIP_SCATTER_CUDA -eq "1") {
+    Write-Info "Skipping scatter_cuda build (BRNFS_SKIP_SCATTER_CUDA=1)."
+    Write-Info "NOTE: bokeh rendering requires scatter_cuda for practical performance; focus stacking does not."
+} else {
+    Write-Info "Building the CUDA extension (scatter_cuda) against the CURRENT PyTorch..."
+    Push-Location (Join-Path $ProjectRoot "brnfs\cuda_src")
+    try {
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "build", "dist"
+        Get-ChildItem -Force -Directory -Filter "*.egg-info" -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        Get-ChildItem -Recurse -Force -Include *.pyd,*.dll,*.so -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 
-    & $VenvPython -m pip install --no-build-isolation --force-reinstall --no-cache-dir .
-    $ScatterBuilt = $true
-} catch {
-    Write-Warning ("Failed to build scatter_cuda. Bokeh rendering will not work until this succeeds. " +
-        "Make sure you installed: (1) NVIDIA driver, (2) CUDA Toolkit 11.7, (3) Visual Studio Build Tools (C++), and (4) are using a CUDA-enabled PyTorch wheel. " +
-        "Error: " + $_.Exception.Message)
-} finally {
-    Pop-Location
+        & $VenvPython -m pip install --no-build-isolation --force-reinstall --no-cache-dir .
+        $ScatterBuilt = $true
+    } catch {
+        Write-Warning ("Failed to build scatter_cuda. Bokeh rendering will not work until this succeeds. " +
+            "Make sure you installed: (1) NVIDIA driver, (2) CUDA Toolkit 11.7, (3) Visual Studio Build Tools (C++), and (4) are using a CUDA-enabled PyTorch wheel. " +
+            "Error: " + $_.Exception.Message)
+    } finally {
+        Pop-Location
+    }
 }
 
 Write-Info "Quick sanity checks..."
@@ -356,6 +413,4 @@ print("! scatter_cuda not built (see warnings above)")
 Write-Info "DONE."
 Write-Info "Next:"
 Write-Info "  .\.venv\Scripts\Activate.ps1"
-Write-Info "  python .\gui\gui.py"
-
-
+Write-Info "  python -m brnfs gui"

@@ -1,31 +1,29 @@
 #!/usr/bin/env bash
-# Deterministic environment setup script for the `bokeh_rendering_and_focus_stacking_suite/` project (WSL/Linux).
+# Deterministic environment setup script for BRnFS (Linux / WSL2).
 #
-# This version uses a **single Python venv** and:
-# - installs the pinned legacy scientific stack (numpy==1.19.5, scikit-image==0.17.2, ...)
-# - installs PyTorch CUDA wheels (cu117)
-# - builds and installs the custom CUDA extension (`scatter_cuda`)
-#
-# If you are currently in a conda session (e.g. `(base)`), the script can optionally
-# bootstrap a Python 3.9 conda env automatically and re-run itself via `conda run`.
+# This script creates/updates `.venv`, installs the pinned Python 3.9 runtime,
+# ensures model weights, and builds the optional fast `scatter_cuda` renderer.
 #
 # Usage:
-#   bash setup.sh              # creates/updates .venv and installs deps
+#   bash setup.sh
+#
+# Useful overrides:
+#   PYTHON_BIN=python3.9 bash setup.sh
+#   BRNFS_SKIP_WEIGHTS=1 bash setup.sh
+#   BRNFS_SKIP_SCATTER_CUDA=1 bash setup.sh
+#   CUDA_HOME=/usr/local/cuda-11.7 bash setup.sh
 #
 # After it finishes:
 #   source .venv/bin/activate
-#   python -m gui.gui
+#   python -m brnfs gui
 #
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${PROJECT_ROOT}/.venv"
 
-# You may override the interpreter explicitly:
+# You may override the interpreter used to create `.venv` explicitly:
 #   PYTHON_BIN=python3.9 bash setup.sh
-#
-# This project pins a legacy scientific stack (numpy==1.19.5, scikit-image==0.17.2, ...),
-# so it must run on Python 3.9 (and, in practice, cannot run on Python 3.12+).
 if [ -n "${PYTHON_BIN:-}" ]; then
   : # user-specified
 elif command -v python3.9 >/dev/null 2>&1; then
@@ -40,7 +38,7 @@ else
 fi
 
 echo "Project root: ${PROJECT_ROOT}"
-echo "Using python: ${PYTHON_BIN}"
+echo "Python for new venv: ${PYTHON_BIN}"
 
 PY_MINOR="$("${PYTHON_BIN}" - <<'PY'
 import sys
@@ -48,90 +46,51 @@ print(f"{sys.version_info.major}.{sys.version_info.minor}")
 PY
 )"
 if [ "${PY_MINOR}" != "3.9" ]; then
-  # If we're already in a conda shell, we can bootstrap Python 3.9 automatically.
-  # We intentionally use `conda run` (instead of `conda activate`) so this script
-  # remains non-interactive and doesn't rely on shell state.
-  if [ "${BRNFS_CONDA_BOOTSTRAP:-1}" = "1" ] \
-    && [ -n "${CONDA_PREFIX:-}" ] \
-    && command -v conda >/dev/null 2>&1 \
-    && [ -z "${BRNFS_RERUN_IN_CONDA:-}" ]; then
-    CONDA_ENV_NAME="${BRNFS_CONDA_ENV_NAME:-BRnFS}"
-
-    echo "Detected conda shell but Python is ${PY_MINOR}; bootstrapping conda env '${CONDA_ENV_NAME}' with Python 3.9..." >&2
-
-    if ! conda env list | awk '{print $1}' | grep -Fxq "${CONDA_ENV_NAME}"; then
-      conda create -n "${CONDA_ENV_NAME}" python=3.9 -y
-    fi
-
-    echo "Re-running setup inside conda env '${CONDA_ENV_NAME}' (via conda run)..." >&2
-    export BRNFS_RERUN_IN_CONDA=1
-    export BRNFS_CONDA_ENV_NAME="${CONDA_ENV_NAME}"
-    exec conda run -n "${CONDA_ENV_NAME}" bash "$0"
-  fi
-
-  echo "ERROR: Unsupported Python ${PY_MINOR} (from: ${PYTHON_BIN})." >&2
-  echo "This project requires Python 3.9 due to pinned legacy deps (e.g. numpy==1.19.5)." >&2
-  echo "" >&2
-  echo "Fix options:" >&2
-  echo "  - If you're using conda:" >&2
-  echo "      conda create -n BRnFS python=3.9 -y && conda activate BRnFS" >&2
-  echo "      bash setup.sh" >&2
-  echo "  - Or install a system python3.9 and run:" >&2
-  echo "      PYTHON_BIN=python3.9 bash setup.sh" >&2
+  echo "ERROR: BRnFS requires Python 3.9, but ${PYTHON_BIN} is Python ${PY_MINOR}." >&2
+  echo "Use PYTHON_BIN=python3.9 bash setup.sh, or create a Python 3.9 environment first." >&2
   exit 1
 fi
 
 ###############################################################################
 # Environment strategy
 #
-# Default: always use a project-local venv at `${PROJECT_ROOT}/.venv` and
-# activate it for the remainder of the script.
-#
-# If you really want to install into an active conda env instead, you may set:
-#   BRNFS_USE_VENV=0 bash setup.sh
+# Always use a project-local venv at `${PROJECT_ROOT}/.venv` and activate it
+# for the remainder of the script before installing packages.
 ###############################################################################
 
-BRNFS_USE_VENV="${BRNFS_USE_VENV:-1}"
-
-if [ "${BRNFS_USE_VENV}" = "1" ]; then
-  # If an old/broken venv exists (wrong python, or moved directory), recreate it.
-  if [ -d "${VENV_DIR}" ]; then
-    if [ ! -x "${VENV_DIR}/bin/python" ] || [ ! -f "${VENV_DIR}/bin/activate" ]; then
-      echo "Removing broken venv: ${VENV_DIR}"
-      rm -rf "${VENV_DIR}"
-    else
-      VENV_PY_MINOR="$("${VENV_DIR}/bin/python" - <<'PY'
+# If an old/broken/wrong-Python venv exists, recreate it.
+if [ -d "${VENV_DIR}" ]; then
+  if [ ! -x "${VENV_DIR}/bin/python" ] || [ ! -f "${VENV_DIR}/bin/activate" ]; then
+    echo "Removing broken venv: ${VENV_DIR}"
+    rm -rf "${VENV_DIR}"
+  else
+    VENV_PY_MINOR="$("${VENV_DIR}/bin/python" - <<'PY'
 import sys
 print(f"{sys.version_info.major}.{sys.version_info.minor}")
 PY
 )"
-      if [ "${VENV_PY_MINOR}" != "3.9" ]; then
-        echo "Removing venv with wrong Python (${VENV_PY_MINOR}): ${VENV_DIR}"
-        rm -rf "${VENV_DIR}"
-      elif ! grep -Fq "export VIRTUAL_ENV=${VENV_DIR}" "${VENV_DIR}/bin/activate"; then
-        echo "Removing moved/corrupted venv (activate path mismatch): ${VENV_DIR}"
-        rm -rf "${VENV_DIR}"
-      fi
+    if [ "${VENV_PY_MINOR}" != "3.9" ]; then
+      echo "Removing venv with unsupported Python ${VENV_PY_MINOR}: ${VENV_DIR}"
+      rm -rf "${VENV_DIR}"
     fi
   fi
-
-  if [ ! -d "${VENV_DIR}" ]; then
-    echo "Creating venv: ${VENV_DIR}"
-    "${PYTHON_BIN}" -m venv --prompt "BRnFS" "${VENV_DIR}"
-  fi
-
-  # shellcheck source=/dev/null
-  source "${VENV_DIR}/bin/activate"
-else
-  echo "Using active environment (no project venv)."
 fi
 
-echo "Upgrading pip tooling..."
-# Pin pip to a conservative range for best compatibility with legacy wheels.
-# (Newer pip versions occasionally drop support for older manylinux wheel tags.)
-python -m pip install --upgrade "pip<24" setuptools wheel
+if [ ! -d "${VENV_DIR}" ]; then
+  echo "Creating venv: ${VENV_DIR}"
+  "${PYTHON_BIN}" -m venv --prompt "BRnFS" "${VENV_DIR}"
+fi
 
-echo "Installing pinned numpy first (build prerequisite for legacy packages)..."
+# shellcheck source=/dev/null
+source "${VENV_DIR}/bin/activate"
+echo "Using venv python: $(python -c 'import sys; print(sys.executable)')"
+
+echo "Upgrading pip tooling..."
+# Pin pip to a conservative range for best compatibility with older wheels.
+# Newer pip versions occasionally drop support for older manylinux wheel tags.
+python -m pip install --upgrade "pip<24" "setuptools<81" wheel
+
+echo "Installing pinned numpy first (build prerequisite for older packages)..."
 # Force wheels-only: source builds are fragile and (on newer Pythons) will fail.
 python -m pip install --no-cache-dir --only-binary=:all: "numpy==1.19.5"
 
@@ -143,7 +102,8 @@ python -m pip install --upgrade \
   --extra-index-url https://download.pytorch.org/whl/cu117
 
 echo "Installing remaining Python dependencies from requirements.txt..."
-# Note: keeping this as a single command preserves the pinned legacy stack in requirements.txt.
+# requirements.txt intentionally excludes torch/opencv/lightning packages that
+# are installed explicitly above/below to avoid accidental numpy upgrades.
 python -m pip install --no-cache-dir -r "${PROJECT_ROOT}/requirements.txt"
 
 echo "Installing OpenCV (pinned) WITHOUT upgrading numpy..."
@@ -158,6 +118,9 @@ python -m pip install --no-deps --no-cache-dir "lightning-fabric==1.9.5"
 
 echo "Uninstalling TensorFlow if it was pulled in previously (optional dependency)..."
 python -m pip uninstall -y tensorflow tensorflow-io-gcs-filesystem >/dev/null 2>&1 || true
+
+echo "Installing this project in editable mode (without dependency resolution)..."
+python -m pip install -e "${PROJECT_ROOT}" --no-deps
 
 ###############################################################################
 # Model weights (LDF + LaMa + MiDaS/DPT)
@@ -222,25 +185,45 @@ ensure_weight() {
   echo "✓ Downloaded ${name} weight (${final_size} bytes)"
 }
 
+ensure_existing_weight() {
+  local name="$1"
+  local dest="$2"
+  local min_bytes="$3"
+
+  local size
+  size="$(stat -c%s "${dest}" 2>/dev/null || echo 0)"
+  if [ "${size}" -lt "${min_bytes}" ]; then
+    echo "ERROR: ${name} is missing or incomplete (${size} bytes): ${dest}" >&2
+    echo "ERROR: this file should be present in the repository under models/." >&2
+    return 1
+  fi
+  echo "✓ ${name} weight present: ${dest} (${size} bytes)"
+}
+
 if [ "${BRNFS_SKIP_WEIGHTS:-0}" != "1" ]; then
   echo "Ensuring model weights are available (set BRNFS_SKIP_WEIGHTS=1 to skip)..."
+
+  ensure_existing_weight \
+    "LDF snapshot" \
+    "${PROJECT_ROOT}/models/ldf/model-40" \
+    50000000
 
   ensure_weight \
     "LDF (salient detection backbone)" \
     "https://huggingface.co/ysheng/DrBokeh/resolve/main/resnet50-19c8e357.pth?download=true" \
-    "${PROJECT_ROOT}/app/bokeh_rendering/Salient/LDF/res/resnet50-19c8e357.pth" \
+    "${PROJECT_ROOT}/models/ldf/resnet50-19c8e357.pth" \
     50000000
 
   ensure_weight \
     "LaMa (RGB inpainting)" \
     "https://huggingface.co/ysheng/DrBokeh/resolve/main/best.ckpt?download=true" \
-    "${PROJECT_ROOT}/app/bokeh_rendering/Inpainting/lama/big-lama/models/best.ckpt" \
+    "${PROJECT_ROOT}/models/lama/big-lama/models/best.ckpt" \
     150000000
 
   ensure_weight \
     "MiDaS/DPT (monocular depth)" \
     "https://huggingface.co/ysheng/DrBokeh/resolve/main/dpt_large-midas-2f21e586.pt?download=true" \
-    "${PROJECT_ROOT}/app/bokeh_rendering/Depth/DPT/weights/dpt_large-midas-2f21e586.pt" \
+    "${PROJECT_ROOT}/models/dpt/dpt_large-midas-2f21e586.pt" \
     300000000
 else
   echo "Skipping model weight downloads (BRNFS_SKIP_WEIGHTS=1)."
@@ -286,20 +269,6 @@ else
     done
 
     if [ -z "${CXX:-}" ]; then
-      # Prefer installing a compatible toolchain via conda (works on WSL without sudo).
-      if [ -n "${CONDA_PREFIX:-}" ] && command -v conda >/dev/null 2>&1; then
-        echo "Attempting to install a GCC 11 toolchain into the active conda env (no sudo)..."
-        conda install -y "gcc_linux-64=11" "gxx_linux-64=11" >/dev/null 2>&1 \
-          || conda install -y -c conda-forge "gcc_linux-64=11" "gxx_linux-64=11"
-
-        if command -v x86_64-conda-linux-gnu-gcc >/dev/null 2>&1 && command -v x86_64-conda-linux-gnu-g++ >/dev/null 2>&1; then
-          export CC="x86_64-conda-linux-gnu-gcc"
-          export CXX="x86_64-conda-linux-gnu-g++"
-          export CUDAHOSTCXX="${CXX}"
-          echo "Using ${CXX} (conda toolchain) for CUDA builds."
-        fi
-      fi
-
       if [ -z "${CXX:-}" ] && command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1 && command -v apt-get >/dev/null 2>&1; then
         echo "Installing gcc-11/g++-11 via apt (passwordless sudo detected)..."
         sudo -n apt-get update
@@ -323,7 +292,7 @@ else
   fi
 
   echo "Building the CUDA extension (scatter_cuda) against the CURRENT PyTorch..."
-  pushd "${PROJECT_ROOT}/app/cuda-src" >/dev/null
+  pushd "${PROJECT_ROOT}/brnfs/cuda_src" >/dev/null
   rm -rf build/ dist/ *.egg-info/ __pycache__/ || true
   find . -name "*.so" -delete || true
   python -m pip install --no-build-isolation --force-reinstall --no-cache-dir .
@@ -331,6 +300,22 @@ else
 fi
 
 echo "Quick sanity checks..."
+if [ "${BRNFS_SKIP_SCATTER_CUDA:-0}" = "1" ]; then
+python - << 'PY'
+import numpy as np
+import torch
+import cv2
+import pandas as pd
+import matplotlib
+
+print("✓ numpy:", np.__version__)
+print("✓ torch:", torch.__version__, "cuda:", torch.cuda.is_available())
+print("✓ cv2:", cv2.__version__)
+print("✓ pandas:", pd.__version__)
+print("✓ matplotlib:", matplotlib.__version__)
+print("! scatter_cuda not built (BRNFS_SKIP_SCATTER_CUDA=1)")
+PY
+else
 python - << 'PY'
 import numpy as np
 import torch
@@ -346,12 +331,9 @@ print("✓ pandas:", pd.__version__)
 print("✓ matplotlib:", matplotlib.__version__)
 print("✓ scatter_cuda import OK")
 PY
+fi
 
 echo "DONE."
 echo "Next:"
-if [ "${BRNFS_USE_VENV}" = "1" ]; then
-  echo "  source .venv/bin/activate"
-else
-  echo "  conda activate ${BRNFS_CONDA_ENV_NAME:-BRnFS}"
-fi
-echo "  python -m gui.gui"
+echo "  source .venv/bin/activate"
+echo "  python -m brnfs gui"
