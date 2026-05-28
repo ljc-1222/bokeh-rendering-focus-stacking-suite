@@ -134,9 +134,28 @@ The latest generation status is recorded in
 Input: multiple images of the same scene focused at different depths.
 Output: one all-in-focus image assembled from the sharp regions of the stack.
 
-| Near / first focus frame | Middle focus frame | Far / last focus frame | Fused output |
-| --- | --- | --- | --- |
-| <img src="docs/assets/readme/focus_input_1.png" alt="Focus stack input frame 1" width="220"> | <img src="docs/assets/readme/focus_input_2.png" alt="Focus stack input frame 2" width="220"> | <img src="docs/assets/readme/focus_input_3.png" alt="Focus stack input frame 3" width="220"> | <img src="docs/assets/readme/focus_fused.png" alt="Focus stacking fused result" width="220"> |
+<table align="center">
+  <tr>
+    <th align="center">Near / first focus frame</th>
+    <th align="center">Middle focus frame</th>
+    <th align="center">Far / last focus frame</th>
+    <th align="center">Fused output</th>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/assets/readme/focus_input_1.png" alt="Focus stack input frame 1" width="220">
+    </td>
+    <td align="center">
+      <img src="docs/assets/readme/focus_input_2.png" alt="Focus stack input frame 2" width="220">
+    </td>
+    <td align="center">
+      <img src="docs/assets/readme/focus_input_3.png" alt="Focus stack input frame 3" width="220">
+    </td>
+    <td align="center">
+      <img src="docs/assets/readme/focus_fused.png" alt="Focus stacking fused result" width="220">
+    </td>
+  </tr>
+</table>
 
 ### Bokeh Rendering
 
@@ -144,9 +163,20 @@ Input: one all-sharp RGB image. Output: a synthetic shallow-depth-of-field image
 computed from estimated disparity, foreground/background separation, inpainted
 background content, and depth-aware scatter rendering.
 
-| All-sharp input | Rendered bokeh |
-| --- | --- |
-| <img src="docs/assets/readme/bokeh_input.png" alt="All-sharp bokeh input image" width="360"> | <img src="docs/assets/readme/bokeh_rendered.png" alt="Rendered bokeh output image" width="360"> |
+<table align="center">
+  <tr>
+    <th align="center">All-sharp input</th>
+    <th align="center">Rendered bokeh</th>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/assets/readme/bokeh_input.png" alt="All-sharp bokeh input image" width="360">
+    </td>
+    <td align="center">
+      <img src="docs/assets/readme/bokeh_rendered.png" alt="Rendered bokeh output image" width="360">
+    </td>
+  </tr>
+</table>
 
 ## Inputs, Outputs, And Caches
 
