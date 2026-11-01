@@ -73,26 +73,27 @@ separate evaluation; the historical numbers above belong to the original rule.
 `Q_AB/F` measures edge preservation and does not by itself establish perceptual
 quality across all scenes.
 
-## Visual Demonstrations
+## Recorded Demonstration
 
-The checked-in images show the included `IMG_2649` example. Focus stacking uses
-the full 15-image stack; the three source previews in the
-[README](../README.md) are selected frames from that stack.
+The [original project video](https://youtu.be/h5yaBS06S4U) provides visual evidence for the application workflow; the recording is **not** a new run of this repository revision.
 
-| Example source frame | Fused output |
-| --- | --- |
-| ![One source frame from the included focus stack](assets/readme/focus_input_1.png) | ![All-in-focus result from the included stack](assets/readme/focus_fused.png) |
+| Recording time | Observed operation | Interpretation |
+| --- | --- | --- |
+| [06:07–06:27](https://youtu.be/h5yaBS06S4U?t=367) | Focus stacking: select the flower stack, use the fusion controls, and generate a result with an on-screen score. | The program produces an all-in-focus result. The recording does not establish the dataset-wide scores tabulated above. |
+| [06:28–06:42](https://youtu.be/h5yaBS06S4U?t=388) | Change the mask mode to **Hard (Argmin)** and regenerate; the flowers become noticeably blurred. | This is an intentionally incorrect **minimum-sharpness** negative control, not a comparison of normal hard-argmax and soft masks. |
+| [06:45–06:52](https://youtu.be/h5yaBS06S4U?t=405) | Fuse a second scene featuring a “VICINITY MAP” sign. | Demonstrates another recorded scene; its full source stack is **not** included with the published example inputs. |
+| [07:03–07:38](https://youtu.be/h5yaBS06S4U?t=423) | Select an image, preprocess the scene, enable the red **focus overlay**, and adjust bokeh controls. | The overlay shows a predicted focus region and updates as controls change; it is **not** the final bokeh image. |
+| [07:39–07:53](https://youtu.be/h5yaBS06S4U?t=459) | Press **Render** and display the bokeh result. | Actual bokeh rendering is a separate operation; this single screen recording is not a timing benchmark. |
 
-Bokeh evaluation was qualitative. The original parameter sweep varied blur
-strength and focal disparity to show increasing defocus and movement of the
-in-focus region. The example below shows one saved setting. Its quality depends
-on the estimated disparity, foreground separation, background inpainting, and
-layered rendering; errors in these intermediate signals can appear at object
-boundaries.
+The recorded interface predates later GUI/CLI and path changes. For reproducible **current-version examples**, use the commands in [Setup & CLI](setup.md). The clean, high-resolution images embedded in the [README](../README.md) are preferable to extracting low-resolution results from a screen recording.
 
-| Input image | Rendered bokeh |
-| --- | --- |
-| ![Input image for bokeh rendering](assets/readme/bokeh_input.png) | ![Rendered bokeh from the included image](assets/readme/bokeh_rendered.png) |
+## Visual Examples
+
+The existing [README showcase](../README.md#results-at-a-glance) displays the original flower scene and the saved bokeh/focus outputs. Its focus result is generated from the **complete 15-image stack**, even though only three representative inputs are displayed. The current demo asset status and input filenames are documented in [the generated asset notes](assets/readme/demo_status.md).
+
+For bokeh, the qualitative observation is control over **how much** defocus is applied and **where** the focal region lies. The recorded focus overlay is a preview signal, not an additional rendered output. Actual bokeh quality depends on relative disparity, foreground separation, inpainting, and the occlusion-aware renderer.
+
+For focus stacking, the recorded Hard (Argmin) failure illustrates the role of selecting strong local detail. It should not be used as evidence that ordinary hard selection is intrinsically worse than soft blending; the 791-stack **soft vs. hard-argmax** ablation above is a separate comparison.
 
 ## Reproduction Scope
 

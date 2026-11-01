@@ -1,96 +1,74 @@
 # BRnFS — Bokeh Rendering & Focus Stacking
 
-An interactive computational photography suite for exploring depth of field in
-two directions: **render a shallow-focus image from one all-sharp input**, or
-**combine a focus stack into an all-in-focus image**. Both workflows are available
-through a shared Tkinter interface and a command-line interface.
+**Two ways to change depth of field:** synthesize shallow-focus bokeh from a single image, or combine a focus bracket into an all-in-focus image. BRnFS brings both workflows into one Tkinter GUI and a common command-line interface.
 
-Final project for **EE3662 Digital Signal Processing Laboratory**, National Tsing
-Hua University. By **Jin-Cheng Lin** and **Hsin-Chang Tsai**.
+[**Watch the original demo**](https://youtu.be/h5yaBS06S4U) · [Results & evaluation](docs/results.md) · [Setup & CLI](docs/setup.md) · [Architecture](docs/architecture.md)
 
-[Results and experiments](docs/results.md) · [Setup and usage](docs/setup.md) ·
-[How it works](docs/architecture.md)
+## Results at a glance
 
-## See the results
+### 1. Bokeh rendering — reduce depth of field
 
-### Bokeh rendering
-
-The renderer uses estimated disparity, foreground separation, and an inpainted
-background to synthesize defocus. Adjust the focal plane, blur strength, and lens
-kernel size to control where the scene stays sharp and how strongly it blurs.
+A single RGB image is processed into depth, foreground, and inpainted background layers before an occlusion-aware scatter renderer produces the defocused result.
 
 <table>
-  <tr>
-    <th>All-sharp input</th>
-    <th>Rendered bokeh</th>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/readme/bokeh_input.png" alt="All-sharp flower scene used as the bokeh input" width="440"></td>
-    <td><img src="docs/assets/readme/bokeh_rendered.png" alt="Synthetic bokeh output from the same flower scene" width="440"></td>
-  </tr>
+<tr><th>Input image</th><th>Synthetic bokeh</th></tr>
+<tr>
+<td><img src="docs/assets/readme/bokeh_input.png" alt="Original all-sharp photo of flowers" width="440"></td>
+<td><img src="docs/assets/readme/bokeh_rendered.png" alt="Synthetic shallow-depth-of-field result on the same scene" width="440"></td>
+</tr>
 </table>
 
-Included example: `IMG_2649`, rendered with `K=30`, `focal=0.10`, `lens=71`, and
-`gamma=2.2`. Focal values refer to normalized disparity; the lens setting is a
-kernel size. The GUI provides a focus overlay for previewing parameter changes;
-press **Render** to compute the final image.
+Shown setting: `K=30`, `focal=0.10`, `lens=71`, `gamma=2.2`. The focal parameter is relative to normalized disparity, not a distance in meters. The bokeh renderer builds on [Dr.Bokeh](https://github.com/ShengCN/DrBokeh-Src); the integration and interface are described [below](#implementation-and-provenance).
 
-### Focus stacking
+### 2. Focus stacking — extend depth of field
 
-The fusion pipeline aligns the inputs and selects sharp detail at multiple
-spatial scales. This example uses **all 15 images** in the included stack; three
-representative input frames are shown below.
+The input stack is registered by ECC, decomposed into Laplacian pyramids, fused using sharpness-driven masks, and reconstructed into a single image.
 
 <table>
-  <tr>
-    <th>Input 1 of 15</th>
-    <th>Input 8 of 15</th>
-    <th>Input 15 of 15</th>
-    <th>Fused output</th>
-  </tr>
-  <tr>
-    <td><img src="docs/assets/readme/focus_input_1.png" alt="First input frame, with the nearer flowers in focus" width="220"></td>
-    <td><img src="docs/assets/readme/focus_input_2.png" alt="Eighth input frame, with the middle flowers in focus" width="220"></td>
-    <td><img src="docs/assets/readme/focus_input_3.png" alt="Fifteenth input frame, with the background in focus" width="220"></td>
-    <td><img src="docs/assets/readme/focus_fused.png" alt="All-in-focus result fused from all 15 input frames" width="220"></td>
-  </tr>
+<tr><th colspan="3">Three representative input frames</th><th>Final fusion of all 15 frames</th></tr>
+<tr>
+<td><img src="docs/assets/readme/focus_input_1.png" alt="Near-focused input frame 1 of 15" width="165"></td>
+<td><img src="docs/assets/readme/focus_input_2.png" alt="Middle-focused input frame 8 of 15" width="165"></td>
+<td><img src="docs/assets/readme/focus_input_3.png" alt="Far-focused input frame 15 of 15" width="165"></td>
+<td><img src="docs/assets/readme/focus_fused.png" alt="All-in-focus output composed from 15 frames" width="390"></td>
+</tr>
 </table>
 
-Settings: **Tenengrad+Blur**, **soft masks**, **mean** top-layer fusion, and
-**3 pyramid levels**. Image filenames and regeneration commands are documented in
-[Results and experiments](docs/results.md).
+Shown setting: **Tenengrad+Blur**, **soft mask**, **mean** coarsest-level fusion, and **3 pyramid levels**. The three source images above are previews only; the actual output uses **all 15** images in `examples/focus/IMG_2649/`.
 
-The original project evaluation compared **24 configurations on 791 image
-stacks**. Tenengrad+Blur with soft masks and mean top-layer fusion achieved the
-highest average score, **Q_AB/F = 0.8854 ± 0.0057** (95% confidence interval),
-under the project's multi-source evaluation rule. The
-[experiment summary](docs/results.md#focus-stacking-experiments) explains the
-ablations, the metric's source-selection dependence, and which results can be
-regenerated from this checkout.
+## Recorded GUI walkthrough
 
-## What this project brings together
+The original [8-minute demonstration](https://youtu.be/h5yaBS06S4U) includes both working GUIs. Jump directly to the relevant operations:
 
-- **Interactive depth-of-field editing:** two independent workflows in one GUI,
-  with input previews, explicit rendering/fusion, and manual image saving.
-- **Reusable bokeh preprocessing:** cache estimated scene layers, preview the
-  focus region, and render additional parameter settings without repeating the
-  automatic depth, saliency, and inpainting stages.
-- **Configurable focus fusion:** ECC alignment and Laplacian-pyramid fusion with
-  six sharpness definitions, hard or soft masks, and mean or max top-layer fusion.
-- **Design analysis:** compare fusion choices and pyramid depth, and expose
-  intermediate bokeh images through the CLI for inspecting artifacts.
+| Workflow | Watch | What the recording demonstrates |
+| --- | --- | --- |
+| Focus stacking | [06:07 — selecting frames and fusion](https://youtu.be/h5yaBS06S4U?t=367) | Source preview, fusion controls, Generate, and a fused output |
+| Negative control | [06:28 — Hard (Argmin)](https://youtu.be/h5yaBS06S4U?t=388) | Deliberately selecting less-sharp content produces a blurred output; **this is not** the normal hard-argmax baseline |
+| Bokeh rendering | [07:03 — preprocessing and focus controls](https://youtu.be/h5yaBS06S4U?t=423) | Reusing scene preprocessing, adjusting focus/blur settings, and viewing the red focus overlay |
+| Final render | [07:39 — Render](https://youtu.be/h5yaBS06S4U?t=459) | Computing the bokeh image separately from the overlay preview |
 
-The bokeh pipeline adapts [Dr.Bokeh](https://github.com/ShengCN/DrBokeh-Src),
-including its CUDA renderer and pretrained DPT, LDF, and LaMa components. The
-suite's interface, workflow integration, and focus-stacking experiments build on
-these existing methods. See [How it works](docs/architecture.md) for module
-boundaries and [Third-party notices](THIRD_PARTY_NOTICES.md) for source attribution
-and license status.
+The video is an **archived project demonstration**; the GUI and repository have since been reorganized. The red outline is a **focus preview**, not a live bokeh render. Rendering is triggered explicitly with **Render**. See [Results & evaluation](docs/results.md#recorded-demonstration) for what can and cannot be concluded from this recording.
 
-## Try focus stacking on CPU
+## What we implemented
 
-The focus CLI needs Python 3.9, NumPy, and OpenCV. It does not load the bokeh models
-or require a CUDA build. From Linux or WSL2:
+- **One interactive suite:** a two-tab GUI, preview and save actions, a unified `python -m brnfs` CLI, and shared path/asset handling.
+- **Reusable bokeh preprocessing:** cache depth, saliency, inpainting, and foreground/background layers so successive parameter renders need not recompute the automatic model stages.
+- **Configurable multi-scale focus fusion:** ECC alignment, Gaussian/Laplacian pyramids, six sharpness definitions, hard/soft selection masks, and mean/max residual fusion.
+- **Experimental analysis:** an ablation of fusion design choices across a recorded **791-stack, 24-configuration** evaluation.
+
+### Focus-stacking experimental highlights
+
+| Recorded outcome | Result |
+| --- | ---: |
+| Highest mean edge-preservation score (Tenengrad+Blur / soft / mean) | `Q_AB/F = 0.8854 ± 0.0057` (95% CI) |
+| Soft masks vs. normal hard masks, paired difference | `+0.0106 ± 0.0005` |
+| Stacks improved by soft masks under the recorded protocol | **98.0%** |
+
+These are results of the **original project evaluation**, not a fresh benchmark run on the current checkout. The extended multi-source `Q_AB/F` metric selects references using sharpness maps; comparisons across different sharpness definitions therefore have an evaluation-dependence caveat. See the [full tables and interpretation](docs/results.md#focus-stacking-experiments).
+
+## Quick start — focus stacking on CPU
+
+The focus CLI does not require PyTorch, bokeh weights, or CUDA. It uses **Python 3.9** and pinned NumPy/OpenCV versions. From Linux or WSL2:
 
 ```bash
 git clone https://github.com/ljc-1222/bokeh-rendering-focus-stacking-suite.git
@@ -101,51 +79,34 @@ python -m pip install --upgrade "pip<24" "setuptools<81" wheel
 python -m pip install --only-binary=:all: numpy==1.19.5
 python -m pip install --no-deps opencv-python-headless==4.5.5.64
 python -m pip install --no-deps -e .
-python -m brnfs doctor --focus
-python -m brnfs focus \
-  --dataset examples/focus/IMG_2649 \
+python -m brnfs focus --dataset examples/focus/IMG_2649 \
   --output outputs/focus/IMG_2649_fused.png \
   --levels 3 --mask soft --top mean --sharpness Tenengrad+Blur
 ```
 
-Open `outputs/focus/IMG_2649_fused.png` to inspect the result. The first run also
-aligns and caches the input stack. For Windows commands, dependency details, and
-cache behavior, see [Setup and usage](docs/setup.md).
+Output: `outputs/focus/IMG_2649_fused.png`. The aligned input stack is cached for subsequent runs. [Windows instructions and troubleshooting](docs/setup.md#focus-stacking-on-cpu) are in the setup guide.
 
-## Run the GUI and bokeh workflow
+## Full GUI and bokeh rendering
 
-The full suite uses the pinned Python 3.9 environment and pretrained model
-weights. Practical bokeh rendering requires an NVIDIA GPU and the `scatter_cuda`
-extension; the setup scripts target PyTorch with CUDA 11.7.
-
-From the repository root on Linux or WSL2:
+Bokeh uses pretrained DPT/LDF/LaMa models and a CUDA 11.7-compatible PyTorch/scatter extension for practical performance. On Linux or WSL2 with Python 3.9 and the required NVIDIA CUDA toolchain:
 
 ```bash
-bash setup.sh
+PYTHON_BIN=python3.9 bash setup.sh
 source .venv/bin/activate
 python -m brnfs doctor
 python -m brnfs gui
 ```
 
-The **Bokeh Rendering** tab separates preprocessing from rendering and provides
-a focus overlay. The **Focus Stacking** tab previews the source sequence and lets
-you choose the fusion settings before generating and saving the result.
+For the full requirements, PowerShell instructions, model downloads, CLI rendering commands, and GPU troubleshooting, use [Setup & CLI](docs/setup.md). A check reported by `doctor` does not constitute a successful GPU inference test.
 
-For CLI rendering, Windows setup, model locations, intermediate outputs, and
-CUDA troubleshooting, follow [Setup and usage](docs/setup.md). The minimal CPU
-environment above is for the focus CLI; use the full environment for the GUI.
+## Implementation and provenance
 
-## Scope and limitations
+- [Architecture](docs/architecture.md) — processing stages, masks, parameter meanings, and module map.
+- [Results & evaluation](docs/results.md) — detailed ablations, scoring caveats, and recorded GUI examples.
+- [Third-party notices](THIRD_PARTY_NOTICES.md) — upstream sources, model provenance, and license status.
 
-Bokeh quality depends on the estimated disparity, foreground mask, and inpainted
-background, especially around thin structures and occlusion boundaries. The
-current renderer uses a circular aperture model. Focus stacking depends on image
-alignment and the sharpness cues used to select detail; scene motion and blending
-can introduce artifacts. These dependencies are described in
-[How it works](docs/architecture.md).
+The bokeh scattering renderer and its CUDA kernels come from **[Dr.Bokeh](https://github.com/ShengCN/DrBokeh-Src)**, whose existing pipeline also integrates DPT, LDF, and LaMa. This project contributes the shared presentation/interaction layer, workflow organization, and its focus-stacking implementation and evaluation; it does **not** claim the upstream renderer or pretrained models as newly developed here.
 
-This repository includes representative inputs and saved demo outputs. The
-historical 791-stack evaluation is summarized with its limitations in
-[Results and experiments](docs/results.md). Upstream license texts are retained
-under `LICENSES/`; the combined project has no root license. Consult
-[Third-party notices](THIRD_PARTY_NOTICES.md) for the status of each component.
+**Limitations:** bokeh may produce artifacts near thin foreground structures or inaccurate depth/alpha boundaries; focus fusion can be affected by imperfect registration, scene motion, and mask selection. The recorded 791-stack evaluation's raw input manifest and per-stack scores are not included in this repository. No root license has yet been assigned to the combined codebase; consult [Third-party notices](THIRD_PARTY_NOTICES.md) before redistribution.
+
+**Authors:** Jin-Cheng Lin and Hsin-Chang Tsai · National Tsing Hua University, Electrical Engineering · EE3662 Digital Signal Processing Laboratory final project.

@@ -71,6 +71,17 @@ option.
 
 ## Focus stacking
 
+```mermaid
+flowchart TD
+  S["Input focal stack"] --> A["Load, resize, ECC affine alignment"]
+  A --> P["Gaussian and Laplacian pyramids"]
+  P --> M["Per-level sharpness maps"]
+  M --> W["Hard or smoothed soft selection masks"]
+  P --> F["Fuse Laplacian bands and Gaussian residual"]
+  W --> F
+  F --> O["Reconstruct all-in-focus RGB"]
+```
+
 The focus workflow operates on same-size PNG images from one directory, loaded
 in filename order. It uses NumPy and OpenCV and does not require bokeh model
 weights or CUDA.
