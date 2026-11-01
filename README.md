@@ -63,6 +63,9 @@ the included stack.
 
 Example settings: `--levels 3 --mask soft --top mean --sharpness Tenengrad+Blur`.
 
+For a walkthrough of both GUI workflows, watch the
+[full project demo](https://youtu.be/h5yaBS06S4U).
+
 ## Features
 
 - **Unified GUI and CLI:** a two-tab Tkinter interface with source/result
