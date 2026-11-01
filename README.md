@@ -1,37 +1,124 @@
-# BRnFS
+# BRnFS — Bokeh Rendering & Focus Stacking
 
-BRnFS is a computational photography suite with two runnable image workflows:
+An interactive computational photography suite for exploring depth of field in
+two directions: **render a shallow-focus image from one all-sharp input**, or
+**combine a focus stack into an all-in-focus image**. Both workflows are available
+through a shared Tkinter interface and a command-line interface.
 
-- **Bokeh rendering**: synthesize shallow depth of field from one all-sharp RGB
-  image using DPT depth prediction, LDF saliency/alpha estimation, LaMa
-  inpainting, and DScatter rendering.
-- **Focus stacking**: fuse a multi-focus image stack into one all-in-focus image
-  using alignment, Laplacian pyramids, sharpness maps, and mask-based fusion.
+Final project for **EE3662 Digital Signal Processing Laboratory**, National Tsing
+Hua University. By **Jin-Cheng Lin** and **Hsin-Chang Tsai**.
 
-The project provides a unified `python -m brnfs` CLI, a Tkinter GUI, sample
-inputs, setup scripts for the pinned Python 3.9 runtime, and reproducible README
-demo assets.
+[Results and experiments](docs/results.md) · [Setup and usage](docs/setup.md) ·
+[How it works](docs/architecture.md)
 
-## What You Can Run
+## See the results
 
-- Launch a two-tab GUI for bokeh rendering and focus stacking.
-- Run each workflow from the CLI on the included examples.
-- Check local prerequisites with `brnfs doctor`.
-- Regenerate the README figures from the example inputs.
+### Bokeh rendering
 
-Focus stacking can run on CPU. Bokeh rendering is practical only when the model
-weights are present and the CUDA `scatter_cuda` extension is available.
+The renderer uses estimated disparity, foreground separation, and an inpainted
+background to synthesize defocus. Adjust the focal plane, blur strength, and lens
+kernel size to control where the scene stays sharp and how strongly it blurs.
 
-## Quick Start
+<table>
+  <tr>
+    <th>All-sharp input</th>
+    <th>Rendered bokeh</th>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/readme/bokeh_input.png" alt="All-sharp flower scene used as the bokeh input" width="440"></td>
+    <td><img src="docs/assets/readme/bokeh_rendered.png" alt="Synthetic bokeh output from the same flower scene" width="440"></td>
+  </tr>
+</table>
 
-Requirements:
+Included example: `IMG_2649`, rendered with `K=30`, `focal=0.10`, `lens=71`, and
+`gamma=2.2`. Focal values refer to normalized disparity; the lens setting is a
+kernel size. The GUI provides a focus overlay for previewing parameter changes;
+press **Render** to compute the final image.
 
-- Python 3.9
-- Linux/WSL2 or Windows PowerShell
-- CUDA 11.7-compatible PyTorch and CUDA toolkit for practical bokeh rendering
-- NVIDIA GPU recommended for bokeh rendering; not required for focus stacking
+### Focus stacking
 
-Linux / WSL2:
+The fusion pipeline aligns the inputs and selects sharp detail at multiple
+spatial scales. This example uses **all 15 images** in the included stack; three
+representative input frames are shown below.
+
+<table>
+  <tr>
+    <th>Input 1 of 15</th>
+    <th>Input 8 of 15</th>
+    <th>Input 15 of 15</th>
+    <th>Fused output</th>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/readme/focus_input_1.png" alt="First input frame, with the nearer flowers in focus" width="220"></td>
+    <td><img src="docs/assets/readme/focus_input_2.png" alt="Eighth input frame, with the middle flowers in focus" width="220"></td>
+    <td><img src="docs/assets/readme/focus_input_3.png" alt="Fifteenth input frame, with the background in focus" width="220"></td>
+    <td><img src="docs/assets/readme/focus_fused.png" alt="All-in-focus result fused from all 15 input frames" width="220"></td>
+  </tr>
+</table>
+
+Settings: **Tenengrad+Blur**, **soft masks**, **mean** top-layer fusion, and
+**3 pyramid levels**. Image filenames and regeneration commands are documented in
+[Results and experiments](docs/results.md).
+
+The original project evaluation compared **24 configurations on 791 image
+stacks**. Tenengrad+Blur with soft masks and mean top-layer fusion achieved the
+highest average score, **Q_AB/F = 0.8854 ± 0.0057** (95% confidence interval),
+under the project's multi-source evaluation rule. The
+[experiment summary](docs/results.md#focus-stacking-experiments) explains the
+ablations, the metric's source-selection dependence, and which results can be
+regenerated from this checkout.
+
+## What this project brings together
+
+- **Interactive depth-of-field editing:** two independent workflows in one GUI,
+  with input previews, explicit rendering/fusion, and manual image saving.
+- **Reusable bokeh preprocessing:** cache estimated scene layers, preview the
+  focus region, and render additional parameter settings without repeating the
+  automatic depth, saliency, and inpainting stages.
+- **Configurable focus fusion:** ECC alignment and Laplacian-pyramid fusion with
+  six sharpness definitions, hard or soft masks, and mean or max top-layer fusion.
+- **Design analysis:** compare fusion choices and pyramid depth, and expose
+  intermediate bokeh images through the CLI for inspecting artifacts.
+
+The bokeh pipeline adapts [Dr.Bokeh](https://github.com/ShengCN/DrBokeh-Src),
+including its CUDA renderer and pretrained DPT, LDF, and LaMa components. The
+suite's interface, workflow integration, and focus-stacking experiments build on
+these existing methods. See [How it works](docs/architecture.md) for module
+boundaries and [Third-party notices](THIRD_PARTY_NOTICES.md) for source attribution
+and license status.
+
+## Try focus stacking on CPU
+
+The focus CLI needs Python 3.9, NumPy, and OpenCV. It does not load the bokeh models
+or require a CUDA build. From Linux or WSL2:
+
+```bash
+git clone https://github.com/ljc-1222/bokeh-rendering-focus-stacking-suite.git
+cd bokeh-rendering-focus-stacking-suite
+python3.9 -m venv .venv-focus
+source .venv-focus/bin/activate
+python -m pip install --upgrade "pip<24" "setuptools<81" wheel
+python -m pip install --only-binary=:all: numpy==1.19.5
+python -m pip install --no-deps opencv-python-headless==4.5.5.64
+python -m pip install --no-deps -e .
+python -m brnfs doctor --focus
+python -m brnfs focus \
+  --dataset examples/focus/IMG_2649 \
+  --output outputs/focus/IMG_2649_fused.png \
+  --levels 3 --mask soft --top mean --sharpness Tenengrad+Blur
+```
+
+Open `outputs/focus/IMG_2649_fused.png` to inspect the result. The first run also
+aligns and caches the input stack. For Windows commands, dependency details, and
+cache behavior, see [Setup and usage](docs/setup.md).
+
+## Run the GUI and bokeh workflow
+
+The full suite uses the pinned Python 3.9 environment and pretrained model
+weights. Practical bokeh rendering requires an NVIDIA GPU and the `scatter_cuda`
+extension; the setup scripts target PyTorch with CUDA 11.7.
+
+From the repository root on Linux or WSL2:
 
 ```bash
 bash setup.sh
@@ -40,225 +127,25 @@ python -m brnfs doctor
 python -m brnfs gui
 ```
 
-Windows PowerShell:
+The **Bokeh Rendering** tab separates preprocessing from rendering and provides
+a focus overlay. The **Focus Stacking** tab previews the source sequence and lets
+you choose the fusion settings before generating and saving the result.
 
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\setup.ps1
-.\.venv\Scripts\Activate.ps1
-python -m brnfs doctor
-python -m brnfs gui
-```
+For CLI rendering, Windows setup, model locations, intermediate outputs, and
+CUDA troubleshooting, follow [Setup and usage](docs/setup.md). The minimal CPU
+environment above is for the focus CLI; use the full environment for the GUI.
 
-The setup scripts create `.venv`, install the pinned dependency stack, ensure
-the bokeh model weights, install the project in editable mode, and attempt to
-build `scatter_cuda`.
+## Scope and limitations
 
-Useful setup overrides:
+Bokeh quality depends on the estimated disparity, foreground mask, and inpainted
+background, especially around thin structures and occlusion boundaries. The
+current renderer uses a circular aperture model. Focus stacking depends on image
+alignment and the sharpness cues used to select detail; scene motion and blending
+can introduce artifacts. These dependencies are described in
+[How it works](docs/architecture.md).
 
-```bash
-PYTHON_BIN=python3.9 bash setup.sh
-BRNFS_SKIP_WEIGHTS=1 bash setup.sh
-BRNFS_SKIP_SCATTER_CUDA=1 bash setup.sh
-CUDA_HOME=/usr/local/cuda-11.7 bash setup.sh
-```
-
-PowerShell uses the same environment variable names, for example:
-
-```powershell
-$env:BRNFS_SKIP_SCATTER_CUDA = "1"
-.\setup.ps1
-```
-
-## CLI Usage
-
-All public commands are exposed through `python -m brnfs` and, after editable
-install, the `brnfs` console script.
-
-Launch the GUI:
-
-```bash
-python -m brnfs gui
-```
-
-Check prerequisites:
-
-```bash
-python -m brnfs doctor
-python -m brnfs doctor --focus
-python -m brnfs doctor --bokeh
-```
-
-Run focus stacking on the included focus stack:
-
-```bash
-python -m brnfs focus \
-  --dataset examples/focus/IMG_2649 \
-  --output outputs/focus/IMG_2649_fused.png \
-  --levels 3 \
-  --mask soft \
-  --top mean \
-  --sharpness Tenengrad+Blur
-```
-
-Run bokeh rendering on the included all-sharp image:
-
-```bash
-python -m brnfs bokeh \
-  --rgb examples/bokeh/IMG_2649.png \
-  --output outputs/bokeh/IMG_2649_bokeh.png \
-  --k-blur 30.0 \
-  --focal 0.10 \
-  --lens 71 \
-  --gamma 2.2
-```
-
-Generate or refresh the README demo assets:
-
-```bash
-python -m brnfs demo-assets --output docs/assets/readme
-```
-
-If bokeh prerequisites are incomplete, `demo-assets` still generates the focus
-stacking assets and records the skipped bokeh step in
-[`docs/assets/readme/demo_status.md`](docs/assets/readme/demo_status.md).
-
-## Demo Results
-
-The figures below are generated from the included examples under `examples/`.
-The latest generation status is recorded in
-[`docs/assets/readme/demo_status.md`](docs/assets/readme/demo_status.md).
-
-### Focus Stacking
-
-Input: multiple images of the same scene focused at different depths.
-Output: one all-in-focus image assembled from the sharp regions of the stack.
-
-<table align="center">
-  <tr>
-    <th align="center">Near / first focus frame</th>
-    <th align="center">Middle focus frame</th>
-    <th align="center">Far / last focus frame</th>
-    <th align="center">Fused output</th>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="docs/assets/readme/focus_input_1.png" alt="Focus stack input frame 1" width="220">
-    </td>
-    <td align="center">
-      <img src="docs/assets/readme/focus_input_2.png" alt="Focus stack input frame 2" width="220">
-    </td>
-    <td align="center">
-      <img src="docs/assets/readme/focus_input_3.png" alt="Focus stack input frame 3" width="220">
-    </td>
-    <td align="center">
-      <img src="docs/assets/readme/focus_fused.png" alt="Focus stacking fused result" width="220">
-    </td>
-  </tr>
-</table>
-
-### Bokeh Rendering
-
-Input: one all-sharp RGB image. Output: a synthetic shallow-depth-of-field image
-computed from estimated disparity, foreground/background separation, inpainted
-background content, and depth-aware scatter rendering.
-
-<table align="center">
-  <tr>
-    <th align="center">All-sharp input</th>
-    <th align="center">Rendered bokeh</th>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="docs/assets/readme/bokeh_input.png" alt="All-sharp bokeh input image" width="360">
-    </td>
-    <td align="center">
-      <img src="docs/assets/readme/bokeh_rendered.png" alt="Rendered bokeh output image" width="360">
-    </td>
-  </tr>
-</table>
-
-## Inputs, Outputs, And Caches
-
-- `examples/bokeh/*.png`: single RGB images for bokeh rendering.
-- `examples/focus/<dataset>/*.png`: one directory per focus stack dataset.
-- `models/dpt/`, `models/ldf/`, `models/lama/`: model weights used by the bokeh
-  pipeline.
-- `outputs/bokeh/`: rendered bokeh images.
-- `outputs/focus/`: fused focus-stacking images.
-- `outputs/cache/bokeh/`: cached depth, alpha, and layered RGBAD preprocessing.
-- `outputs/cache/focus/`: cached aligned focus stacks.
-
-Generated outputs and caches are runtime artifacts and are not required for a
-fresh checkout.
-
-## Repository Layout
-
-```text
-brnfs/                 # canonical package and unified CLI
-  cli.py               # command parser for python -m brnfs / brnfs
-  paths.py             # central repository path registry
-  ui/                  # Tkinter GUI entry point and tabs
-  focus/               # focus stacking runner
-  bokeh/               # bokeh namespace
-  cuda_src/            # scatter_cuda C++/CUDA extension source
-app/                   # adapted algorithm modules and vendored integration code
-examples/
-  bokeh/               # single-image bokeh sample inputs
-  focus/               # multi-focus sample stacks
-models/                # model weight locations
-outputs/               # generated outputs and runtime caches
-docs/
-  architecture.md      # pipeline details and Mermaid diagrams
-  assets/readme/       # README demo images
-scripts/               # helper scripts for demo assets and CUDA rebuilds
-vendor/                # reserved third-party source namespace
-```
-
-For pipeline diagrams and module boundaries, see
-[`docs/architecture.md`](docs/architecture.md).
-
-## CUDA Extension
-
-The bokeh renderer uses `scatter_cuda` for practical performance. The setup
-scripts build it automatically when CUDA is available. To rebuild it manually
-inside an activated environment:
-
-```bash
-bash scripts/build_scatter_cuda.sh
-```
-
-Windows PowerShell:
-
-```powershell
-.\scripts\build_scatter_cuda.ps1
-```
-
-The Linux build script checks that `nvcc` matches `torch.version.cuda` and uses a
-GCC/G++ version compatible with CUDA 11.7 when possible.
-
-## Troubleshooting
-
-- `python: command not found`: activate `.venv` first, or call
-  `.venv/bin/python -m brnfs ...` directly on Linux/WSL2.
-- Missing `cv2`: run `bash setup.sh` or `.\setup.ps1`; OpenCV is installed with
-  a pinned wheel and `--no-deps`.
-- Missing model weights: run setup without `BRNFS_SKIP_WEIGHTS=1`.
-- Missing `pkg_resources`: install `setuptools<81`; the setup scripts pin this
-  because older vendored imports still expect it.
-- Missing `scatter_cuda`: rebuild with `bash scripts/build_scatter_cuda.sh` or
-  `.\scripts\build_scatter_cuda.ps1`.
-- CUDA mismatch: use a CUDA toolkit compatible with the installed PyTorch wheel.
-  The setup scripts target CUDA 11.7.
-- Bokeh rendering is extremely slow: confirm `python -m brnfs doctor --bokeh`
-  reports `scatter_cuda` as present and that PyTorch can see CUDA.
-
-## Third-Party Code And Licensing
-
-This repository integrates DPT, LaMa, and LDF/Dr.Bokeh-style components for
-inference. Preserve [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and the
-available license texts under `LICENSES/` when redistributing.
-
-This checkout does not include a standalone root `LICENSE` file. Treat public
-redistribution of the combined project as pending license review, especially for
-vendored components without an in-tree license file.
+This repository includes representative inputs and saved demo outputs. The
+historical 791-stack evaluation is summarized with its limitations in
+[Results and experiments](docs/results.md). Upstream license texts are retained
+under `LICENSES/`; the combined project has no root license. Consult
+[Third-party notices](THIRD_PARTY_NOTICES.md) for the status of each component.
