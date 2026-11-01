@@ -19,11 +19,11 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg
-          python -m pip install --upgrade yt-dlp pillow
+          python -m pip install --upgrade 'yt-dlp[default]' yt-dlp-ejs pillow
       - name: Download owner's public demo
         run: |
           mkdir -p /tmp/brnfs-source
-          yt-dlp --no-playlist --no-progress -f "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best" --merge-output-format mp4 -o "/tmp/brnfs-source/demo.%(ext)s" "https://www.youtube.com/watch?v=h5yaBS06S4U"
+          yt-dlp --js-runtimes node --extractor-args 'youtube:player_client=android,web_safari,web' --no-playlist --no-progress -f "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best" --merge-output-format mp4 -o "/tmp/brnfs-source/demo.%(ext)s" "https://www.youtube.com/watch?v=h5yaBS06S4U"
       - name: Extract authentic GUI stills and GIFs
         run: |
           cat > /tmp/brnfs_showcase.py <<'PY'
