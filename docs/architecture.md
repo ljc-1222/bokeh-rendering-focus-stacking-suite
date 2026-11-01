@@ -9,8 +9,8 @@ output.
 The CLI and GUI share the algorithm modules. The bokeh interface uses
 `BokehEngine`; the focus CLI uses `run_focus_stacking`, while the focus GUI calls
 the same preprocessing, pyramid, sharpness, and fusion functions directly.
-See [Setup](setup.md) for environment requirements and [Results](results.md)
-for example outputs and evaluation details.
+See [Setup](setup.md) for environment requirements and the
+[README](../README.md#results) for example outputs.
 
 ## Bokeh rendering
 
@@ -95,28 +95,30 @@ weights or CUDA.
 3. **Compute sharpness and masks.** One of six sharpness definitions is applied
    to each color channel of every Laplacian band. Hard masks select the maximum
    response across source images. Soft masks smooth those selections with a
-   `7 x 7` Gaussian kernel (`sigma=1.2`) and normalize across sources. The
+   7 × 7 Gaussian kernel (`sigma=1.2`) and normalize across sources. The
    `hard-min` option deliberately selects the minimum response for comparison.
 4. **Fuse and reconstruct.** Masks weight the Laplacian bands. The coarsest
    Gaussian residual is fused by either mean or maximum. Successive upsampling
    and addition reconstruct the final image, which is clipped to `[0, 255]`.
 
-Here, `L` denotes a Laplacian band, and `Blur` is a `3 x 3` Gaussian blur:
+Here, $L$ denotes a Laplacian band and $G$ a 3 × 3 Gaussian blur:
 
 | Sharpness option | Response |
 |---|---|
-| `L` | Absolute magnitude of `L` |
-| `GaussianBlur(L)` | Smoothed absolute magnitude |
-| `GaussianBlur(L^2)` | Smoothed squared response |
+| `L` | Absolute magnitude, $\lvert L\rvert$ |
+| `GaussianBlur(L)` | Smoothed absolute magnitude, $G(\lvert L\rvert)$ |
+| `GaussianBlur(L^2)` | Smoothed squared response, $G(L^2)$ |
 | `Tenengrad+Blur` | Smoothed squared Sobel-gradient magnitude of `L` |
-| `Variance(L)` | Local variance: `Blur(L^2) - Blur(L)^2`, clamped to zero |
+| `Variance(L)` | Local variance, $G(L^2) - G(L)^2$, clamped to zero |
 | `SML+Blur` | Smoothed sum of absolute horizontal and vertical second differences |
 
-The default settings are `Tenengrad+Blur`, soft masks, mean residual fusion, and
-three pyramid levels. The GUI exposes these choices and displays the existing
-multi-source `Q_AB/F` score; the focus CLI writes the fused image without
-computing that score. See [Results](results.md) for the scoring protocol and its
-limitations.
+The default settings are `Tenengrad+Blur`, soft masks, mean residual fusion,
+and three pyramid levels.
+The GUI exposes these choices and provides source/result previews and saving.
+
+Registration and fusion assume a static scene. Subject motion or unsuccessful
+alignment can introduce ghosting; inaccurate sharpness masks can leave blurred
+regions or seams.
 
 ## Code and data map
 
@@ -137,3 +139,4 @@ Model adapters and third-party code retain their upstream directory layouts
 inside `app/bokeh_rendering/`. See
 [Third-party notices](../THIRD_PARTY_NOTICES.md) for their sources and licensing
 status.
+

@@ -285,8 +285,8 @@ just the bokeh example. Omitting `--output` writes to `docs/assets/readme`.
 Each run replaces the status file in its output directory. The bokeh asset generator requires an importable
 `scatter_cuda` module in its prerequisite check. Read `demo_status.md` after
 generation: individual steps can be skipped or fail even when the command
-returns successfully. These commands regenerate the CLI's built-in demo case,
-not every comparison shown in the project documentation.
+returns successfully. Input filenames for the committed README images are
+listed in [the asset notes](assets/readme/demo_status.md).
 
 ## Diagnostics, outputs, and troubleshooting
 
@@ -327,3 +327,4 @@ does not expose a cache-bypass flag.
 
 For the pipeline stages behind these commands, see
 [`architecture.md`](architecture.md).
+
